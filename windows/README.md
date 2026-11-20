@@ -15,6 +15,11 @@ Open it from the Engineer tab, or launch with `--engineer`. Two pages:
 
 Every edit is written straight to `config.json`, and the operator window reloads its tiles and feeds without restarting.
 
+## Operator shortcuts and saving
+
+- **Space** cuts, **Return** fades, matching the hints on the buttons.
+- The gear dialog saves the current camera view into camera presets **20-23** and recalls them, leaving the Stream Deck's 1-9 untouched.
+
 ## Requirements
 
 - .NET SDK 10 (the .NET 8 SDK that shipped with the booth PC is out of support as of November 2026)

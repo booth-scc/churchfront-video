@@ -50,6 +50,27 @@ public partial class MainWindow : Window
         InitializeComponent();
         Loaded += OnLoaded;
         Closed += OnClosed;
+
+        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
+    }
+
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
+    {
+        // The interface advertises these: Space cuts, Return fades.
+        var me = _config.Config.Me - 1;
+
+        switch (e.Key)
+        {
+            case Key.Space:
+                _atem?.Cut(me);
+                e.Handled = true;
+                break;
+
+            case Key.Enter:
+                _atem?.Auto(me);
+                e.Handled = true;
+                break;
+        }
     }
 
     private void OnLoaded(object? sender, EventArgs e)
@@ -583,6 +604,45 @@ public partial class MainWindow : Window
         }
         panel.Children.Add(presets);
 
+        panel.Children.Add(Heading("SAVE ON CAMERA · 20-39"));
+        var saveStatus = new TextBlock
+        {
+            Text = "These write the camera's own preset memory, clear of the Stream Deck's 1-9.",
+            FontSize = 9.5,
+            Foreground = new SolidColorBrush(Color.Parse("#767C87")),
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        var saveRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        var recallRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+
+        foreach (var number in new[] { 20, 21, 22, 23 })
+        {
+            var save = Ghost($"Save {number}");
+            save.Width = 72;
+            var slot = number;
+            save.Click += (_, _) =>
+            {
+                Link()?.Store(slot);
+                saveStatus.Text = $"Saved the current view to camera preset {slot}.";
+            };
+
+            var recall = Ghost($"Go {number}");
+            recall.Width = 68;
+            recall.Click += (_, _) =>
+            {
+                Link()?.Recall(slot);
+                saveStatus.Text = $"Recalled camera preset {slot}.";
+            };
+
+            saveRow.Children.Add(save);
+            recallRow.Children.Add(recall);
+        }
+
+        panel.Children.Add(saveRow);
+        panel.Children.Add(recallRow);
+        panel.Children.Add(saveStatus);
+
         panel.Children.Add(Heading("EXPOSURE"));
         var exposureAuto = Ghost("Auto exposure");
         exposureAuto.Click += async (_, _) =>
@@ -597,9 +657,7 @@ public partial class MainWindow : Window
 
         dialog.Content = new ScrollViewer { Content = panel };
         dialog.ShowDialog(this);
-    }
-
-    private void ToggleKey(KeyButtonConfig key)
+    }    private void ToggleKey(KeyButtonConfig key)
     {
         var state = _atem?.State;
 
