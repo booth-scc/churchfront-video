@@ -243,14 +243,21 @@ public partial class MainWindow : Window
         _presetButtons[5] = Preset5Button;
         _presetButtons[6] = Preset6Button;
         _presetButtons[7] = Preset7Button;
-        _presetButtons[8] = Preset8Button;
-        _presetButtons[9] = Preset9Button;
 
         foreach (var (number, button) in _presetButtons)
         {
             var preset = number;
             button.Click += (_, _) => Link()?.Recall(preset);
         }
+
+        ExposureAutoButton.Click += async (_, _) =>
+        {
+            if (Link() is { } link)
+            {
+                await link.AutoExposureAsync();
+                await ReadExposureAsync();
+            }
+        };
 
         Hold(PanUpLeft, () => Link()?.Drive(-1, 1), () => Link()?.StopMove());
         Hold(PanUp, () => Link()?.Drive(0, 1), () => Link()?.StopMove());
@@ -276,17 +283,95 @@ public partial class MainWindow : Window
         button.PointerCaptureLost += (_, _) => stop();
     }
 
-    private ViscaIpLink? Link()
+    private ViscaIpLink? Link() => LinkFor(_nextInput);
+
+    private ViscaIpLink? LinkFor(int input)
     {
-        var camera = _config.Config.CameraForInput(_nextInput);
+        var camera = _config.Config.CameraForInput(input);
         if (camera is null || string.IsNullOrWhiteSpace(camera.Host)) return null;
 
-        if (_links.TryGetValue(_nextInput, out var existing)) return existing;
+        if (_links.TryGetValue(input, out var existing)) return existing;
 
         var link = new ViscaIpLink(camera.Host, camera.EffectivePort, camera.FirstPreset);
         link.Start();
-        _links[_nextInput] = link;
+        _links[input] = link;
         return link;
+    }
+
+    private void BuildShotRows()
+    {
+        ShotRows.Children.Clear();
+
+        foreach (var camera in _config.Config.Cameras)
+        {
+            if (camera.AtemInput is not { } input) continue;
+
+            var row = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("62,*,*"),
+                ColumnSpacing = 6,
+            };
+
+            var name = new TextBlock
+            {
+                Text = camera.Name,
+                FontSize = 10,
+                Foreground = input == _nextInput ? TallyPreview : new SolidColorBrush(Color.Parse("#9AA0AA")),
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            };
+
+            row.Children.Add(name);
+
+            var column = 1;
+            foreach (var presetNumber in new[] { 8, 9 })
+            {
+                var label = camera.PresetName(presetNumber);
+                if (label == presetNumber.ToString())
+                {
+                    label = presetNumber == 8 ? "Full Stage" : "Sermon";
+                }
+
+                var button = new Button
+                {
+                    Content = label,
+                    Height = 30,
+                    FontSize = 10,
+                    Classes = { "shot" },
+                };
+
+                var slot = presetNumber;
+                button.Click += (_, _) => LinkFor(input)?.Recall(slot);
+
+                Grid.SetColumn(button, column++);
+                row.Children.Add(button);
+            }
+
+            ShotRows.Children.Add(row);
+        }
+    }
+
+    private async Task ReadExposureAsync()
+    {
+        var link = Link();
+        if (link is null)
+        {
+            ExposureGain.Text = ExposureShutter.Text = ExposureIris.Text = ExposureWhite.Text = "—";
+            return;
+        }
+
+        var exposure = await link.ReadExposureAsync(TimeSpan.FromMilliseconds(1500));
+        if (exposure is null) return;
+
+        ExposureGain.Text = exposure.Gain is { } gain ? $"{gain} dB" : "Auto";
+        ExposureShutter.Text = exposure.Shutter is { } shutter ? $"1/{shutter:0}" : "Auto";
+        ExposureIris.Text = exposure.Iris is { } iris ? $"f/{iris / 100.0:0.#}" : "Auto";
+        ExposureWhite.Text = exposure.WhiteBalance switch
+        {
+            "auto" => "Auto",
+            "kelvin" => exposure.Kelvin is { } kelvin ? $"{kelvin} K" : "Kelvin",
+            null => "—",
+            var mode => mode,
+        };
     }
 
     private void UpdateCameraPanel()
@@ -296,15 +381,14 @@ public partial class MainWindow : Window
         CameraNextName.Text = camera?.Name ?? _atem?.State.Name(_nextInput) ?? "—";
 
         UpdateCameraChips();
+        BuildShotRows();
 
         foreach (var (number, button) in _presetButtons)
         {
-            button.Content = camera is null
-                ? number switch { 8 => "Full Stage", 9 => "Sermon", _ => number.ToString() }
-                : camera.PresetName(number) is { Length: > 0 } name && name != number.ToString()
-                    ? name
-                    : number switch { 8 => "Full Stage", 9 => "Sermon", _ => number.ToString() };
+            button.Content = number.ToString();
         }
+
+        _ = ReadExposureAsync();
     }
 
     // ---- Pictures ----
