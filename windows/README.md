@@ -50,6 +50,21 @@ The installer:
 
 Requires Inno Setup 6: `winget install JRSoftware.InnoSetup`.
 
+## Demo shortcut
+
+`windows\tools\run-demo.ps1` (started by `run-demo.vbs`, no console window) brings up the whole demo booth: fake ATEM, four fake VISCA cameras, six NDI feeds, then the app. A desktop shortcut called **Churchfront Video (Demo)** uses the app icon and runs that script.
+
+Nothing the demo needs lives in `%TEMP%`:
+
+| What | Where |
+|---|---|
+| Demo config | `%APPDATA%\CueVideo\demo\config.json` |
+| Real config | `%APPDATA%\CueVideo\config.json` |
+| Crash log | `%LOCALAPPDATA%\CueVideo\logs\crash.log` |
+| Published build + installer | `windows\dist` |
+
+Closing the app window stops the fake switcher, cameras and NDI senders.
+
 The app connects to `192.168.10.159` by default; override it with `CUEVIDEO_ATEM`.
 
 ## Working without the switcher or cameras

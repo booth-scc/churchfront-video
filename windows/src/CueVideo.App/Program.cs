@@ -15,7 +15,11 @@ class Program
         {
             try
             {
-                var path = Path.Combine(Path.GetTempPath(), "cuevideo-crash.log");
+                var directory = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CueVideo", "logs");
+                Directory.CreateDirectory(directory);
+
+                var path = Path.Combine(directory, "crash.log");
                 File.AppendAllText(path, $"{DateTime.Now:O} {e.ExceptionObject}{Environment.NewLine}{Environment.NewLine}");
             }
             catch (Exception)
