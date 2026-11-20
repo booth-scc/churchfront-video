@@ -9,8 +9,23 @@ class Program
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
     [STAThread]
-    public static void Main(string[] args) => BuildAvaloniaApp()
-        .StartWithClassicDesktopLifetime(args);
+    public static void Main(string[] args)
+    {
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            try
+            {
+                var path = Path.Combine(Path.GetTempPath(), "cuevideo-crash.log");
+                File.AppendAllText(path, $"{DateTime.Now:O} {e.ExceptionObject}{Environment.NewLine}{Environment.NewLine}");
+            }
+            catch (Exception)
+            {
+                // nothing useful to do while crashing
+            }
+        };
+
+        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
 
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()

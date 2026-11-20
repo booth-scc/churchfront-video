@@ -4,7 +4,16 @@ C#/.NET port of the macOS SwiftUI app in `../Sources`, aimed at the booth's Wind
 
 ## Status
 
-Phase 0/1 in progress. ATEM control and NDI send/receive work end to end, VISCA over IP (UDP 52381) is implemented with a fake-camera test suite, and the operator screen now mirrors the macOS layout: NEXT and LIVE on top, a centred strip of live source thumbnails, and one bottom bar with the camera chip, exposure, per-camera shots, framing pad, and FADE / CUT / BLACK / LOWER THIRDS. Keys, presets 1-9 and focus near/far stay in the gear dialog. Settings and the tracker are still to come.
+Phase 0/1 in progress. ATEM control and NDI send/receive work end to end, VISCA over IP (UDP 52381) is implemented with a fake-camera test suite, and the operator screen mirrors the macOS layout: NEXT and LIVE on top, a centred strip of live source thumbnails, and one bottom bar with the camera chip, exposure, per-camera shots, framing pad, and FADE / CUT / BLACK / LOWER THIRDS. An Engineer window maps NDI feeds to inputs, edits cameras and tests VISCA replies. Settings persistence and the tracker are still to come.
+
+## Engineer window
+
+Open it from the Engineer tab, or launch with `--engineer`. Two pages:
+
+- **Setup** - scan NDI, assign a feed to each input (saved to `pictures`), edit camera name/address/port/input/first preset, test a camera's VISCA reply, change the switcher address.
+- **Status** - what the app can see: NDI sources found, camera reply test for all cameras, switcher address.
+
+Every edit is written straight to `config.json`, and the operator window reloads its tiles and feeds without restarting.
 
 ## Requirements
 

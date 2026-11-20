@@ -19,8 +19,8 @@
                         <StackPanel Orientation="Horizontal" Spacing="2">
                             <Button Background="{StaticResource ActivePill}" Foreground="#0A0A0C" CornerRadius="999"
                                     Padding="14,5" FontSize="12" FontWeight="Bold" Content="Operator" />
-                            <Button Background="Transparent" Foreground="{StaticResource InkDim}" CornerRadius="999"
-                                    Padding="14,5" FontSize="12" IsEnabled="False" Content="Engineer" />
+                            <Button x:Name="EngineerButton" Background="Transparent" Foreground="{StaticResource InkDim}" CornerRadius="999"
+                                    Padding="14,5" FontSize="12" Content="Engineer" />
                         </StackPanel>
                     </Border>
                 </StackPanel>

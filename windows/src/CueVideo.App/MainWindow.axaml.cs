@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<int, ViscaIpLink> _links = [];
 
     private AtemClient? _atem;
+    private EngineerWindow? _engineer;
     private NdiView? _liveView;
     private NdiView? _nextView;
     private string? _nextNdiName;
@@ -71,6 +72,11 @@ public partial class MainWindow : Window
         AttachLive();
 
         StatusText.Text = _config.FileError ?? $"Connecting to {host}…";
+
+        if (Environment.GetCommandLineArgs().Any(a => a.Equals("--engineer", StringComparison.OrdinalIgnoreCase)))
+        {
+            OpenEngineer();
+        }
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -171,6 +177,42 @@ public partial class MainWindow : Window
         AutoButton.Click += (_, _) => _atem?.Auto(me);
         BlackButton.Click += (_, _) => _atem?.FadeToBlack(me);
         MoreButton.Click += (_, _) => OpenMore();
+        EngineerButton.Click += (_, _) => OpenEngineer();
+    }
+
+    private void OpenEngineer()
+    {
+        if (_engineer is { IsVisible: true })
+        {
+            _engineer.Activate();
+            return;
+        }
+
+        _engineer = new EngineerWindow(_config, ReloadConfig);
+        _engineer.Closed += (_, _) => _engineer = null;
+        _engineer.Show(this);
+    }
+
+    private void ReloadConfig()
+    {
+        foreach (var thumb in _thumbs) thumb.Dispose();
+        _thumbs.Clear();
+
+        BuildSourceTiles();
+
+        var host = _config.Config.AtemHost;
+        if (_atem is not null && host.Length > 0 &&
+            !string.Equals(_atem.Host, host, StringComparison.OrdinalIgnoreCase))
+        {
+            _atem.Connect(host);
+        }
+
+        _liveNdiName = null;
+        _nextNdiName = null;
+        UpdateLiveTile(_programInput);
+        UpdateNextTile();
+        BuildShots();
+        _ = ShowExposureAsync();
     }
 
     private void WireSpeed()
