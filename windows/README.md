@@ -34,6 +34,22 @@ dotnet run --project windows\src\CueVideo.App
 dotnet run --project windows\src\CueVideo.Spike
 ```
 
+## Packaging
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\build.ps1
+```
+
+Publishes a self-contained `win-x64` build into `windows\dist\publish` (no .NET runtime needed on the booth PC) and compiles `windows\dist\ChurchfrontVideo-Setup-0.1.0.exe` (about 55 MB) with Inno Setup.
+
+The installer:
+
+- installs per machine to `Program Files\Churchfront Video`, with Start-menu entry, optional desktop icon and optional start-with-Windows
+- warns if the NDI 6 runtime is missing but continues
+- keeps `%APPDATA%\CueVideo` on uninstall, so the setup survives upgrades
+
+Requires Inno Setup 6: `winget install JRSoftware.InnoSetup`.
+
 The app connects to `192.168.10.159` by default; override it with `CUEVIDEO_ATEM`.
 
 ## Working without the switcher or cameras
