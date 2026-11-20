@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using CueVideo.Atem;
+using System.Runtime.InteropServices;
 
 namespace CueVideo.Spike;
 
@@ -19,12 +20,22 @@ internal static class Program
     {
         if (args.Length > 0 && args[0] is "-h" or "--help")
         {
-            Console.WriteLine("CueVideo.Spike - Phase 0 harness (doctor mode)");
-            Console.WriteLine("  dotnet run --project src/CueVideo.Spike");
-            Console.WriteLine("  Reports runtime, NDI runtime, config compatibility and the expected booth endpoints.");
+            Console.WriteLine("CueVideo.Spike - Phase 0 harness");
+            Console.WriteLine("  dotnet run --project src/CueVideo.Spike                  report toolchain and booth facts");
+            Console.WriteLine("  dotnet run --project src/CueVideo.Spike -- atem [host] [seconds]");
+            Console.WriteLine("                                                          connect to the switcher and mirror state");
             return 0;
         }
 
+        return args.Length > 0 && args[0].Equals("atem", StringComparison.OrdinalIgnoreCase)
+            ? Atem(args.Skip(1).ToArray())
+            : args.Length > 0 && args[0].Equals("fake-atem", StringComparison.OrdinalIgnoreCase)
+                ? FakeAtem(args.Skip(1).ToArray())
+                : Doctor();
+    }
+
+    private static int Doctor()
+    {
         Console.WriteLine("Churchfront Video - Phase 0 harness");
         Console.WriteLine($"Runtime     : .NET {Environment.Version} ({RuntimeInformation.OSDescription}, {RuntimeInformation.ProcessArchitecture})");
         Console.WriteLine();
@@ -52,8 +63,52 @@ internal static class Program
 
         Console.WriteLine();
         Console.WriteLine("Gates still to run: G1 camera NDI, G2 ATEM tally, G3 VISCA readback, G4 OBS program NDI.");
-        Console.WriteLine("Cameras and ATEM must be powered on; the spike UI opens with `dotnet run --project src/CueVideo.App`.");
         return 0;
+    }
+
+    private static int Atem(string[] args)
+    {
+        var host = args.Length > 0 ? args[0] : "192.168.10.159";
+        var seconds = args.Length > 1 && int.TryParse(args[1], out var parsed) ? parsed : 8;
+
+        using var client = new AtemClient();
+        client.LinkChanged += link => Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] link    {link.State} {link.Message}");
+        client.StateChanged += state => Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] state   {Describe(state)}");
+        client.Connect(host);
+
+        Console.WriteLine($"Connecting to {host}:9910 for {seconds}s ...");
+        Thread.Sleep(TimeSpan.FromSeconds(seconds));
+
+        var final = client.State;
+        Console.WriteLine();
+        Console.WriteLine(new string('-', 60));
+        Console.WriteLine($"Product  : {final.Product}");
+        Console.WriteLine($"Version  : {final.Version}");
+        Console.WriteLine($"Program  : {final.Name(final.Program.GetValueOrDefault(0))}");
+        Console.WriteLine($"Preview  : {final.Name(final.Preview.GetValueOrDefault(0))}");
+        Console.WriteLine($"Inputs   : {string.Join(", ", final.BusSources.Select(i => $"{i.Id}={i.Short}"))}");
+        Console.WriteLine($"Link     : {client.Link.State} {client.Link.Message}");
+        Console.WriteLine($"Commands : {client.SentLog.Count} sent");
+
+        return final.Product.Length > 0 ? 0 : 2;
+    }
+
+    private static int FakeAtem(string[] args)
+    {
+        var port = args.Length > 0 && int.TryParse(args[0], out var parsed) ? parsed : 9910;
+        FakeSwitcher.Run(port);
+        return 0;
+    }
+
+    private static string Describe(AtemState state)
+    {
+        var program = state.Name(state.Program.GetValueOrDefault(0));
+        var preview = state.Name(state.Preview.GetValueOrDefault(0));
+        var transition = state.InTransition.GetValueOrDefault(0) ? "running" : "idle";
+        var keys = state.KeyOnAir.TryGetValue(0, out var map)
+            ? string.Join(",", map.Where(kv => kv.Value).Select(kv => kv.Key + 1))
+            : "-";
+        return $"PGM {program,-6} PVW {preview,-6} transition {transition,-7} keys on: {keys}";
     }
 
     private static string? FindNdiRuntime()

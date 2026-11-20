@@ -4,7 +4,7 @@ C#/.NET port of the macOS SwiftUI app in `../Sources`, aimed at the booth's Wind
 
 ## Status
 
-Phase 0 scaffold. The Avalonia shell opens with the operator layout (program/next, sources, camera panel, transport) but is not wired to anything yet. `CueVideo.Spike` reports toolchain and booth facts for the Phase 0 gates.
+Phase 0/1 in progress. The ATEM client works (handshake, state, dedup, commands) and is covered by unit tests plus a fake switcher. The Avalonia shell shows live program/preview and the ATEM link. NDI and VISCA are still empty projects.
 
 ## Requirements
 
@@ -19,6 +19,21 @@ dotnet build windows\ChurchfrontVideo.sln
 dotnet run --project windows\src\CueVideo.App
 dotnet run --project windows\src\CueVideo.Spike
 ```
+
+The app connects to `192.168.10.159` by default; override it with `CUEVIDEO_ATEM`.
+
+## Working without the switcher or cameras
+
+```powershell
+# terminal 1: a stand-in ATEM on loopback
+dotnet run --project windows\src\CueVideo.Spike -- fake-atem 9910
+
+# terminal 2: point the UI at it
+$env:CUEVIDEO_ATEM = "127.0.0.1"
+dotnet run --project windows\src\CueVideo.App
+```
+
+`dotnet run --project windows\src\CueVideo.Spike -- atem 192.168.10.159 8` prints the real handshake, program/preview and link transitions without opening the UI.
 
 ## Layout
 
