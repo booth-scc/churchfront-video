@@ -1,7 +1,7 @@
 .build/
 .swiftpm/
-CueVideo.app/
-Churchfront Video.app/
+/CueVideo.app/
+"/Churchfront Video.app/"
 *.xcodeproj/
 .DS_Store
 __pycache__/

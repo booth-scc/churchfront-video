@@ -4,7 +4,7 @@ C#/.NET port of the macOS SwiftUI app in `../Sources`, aimed at the booth's Wind
 
 ## Status
 
-Phase 0/1 in progress. The ATEM client works (handshake, state, dedup, commands) and NDI send/receive works end to end (P/Invoke to the NDI 6 runtime, discovery, BGRX frames into the UI). Both are covered by tests, including a loopback NDI sender. VISCA is still an empty project.
+Phase 0/1 in progress. ATEM control and NDI send/receive work end to end, VISCA over IP (UDP 52381) is implemented with a fake-camera test suite, and the operator UI is wired: source buttons set preview, CUT/AUTO/BLACK/keys send commands, tally colours come from the switcher, and the camera panel drives the camera on Next (D-pad, zoom, focus, presets). Settings and the tracker are still to come.
 
 ## Requirements
 
@@ -39,6 +39,12 @@ dotnet run --project windows\src\CueVideo.App
 
 `dotnet run --project windows\src\CueVideo.Spike -- atem 192.168.10.159 8` prints the real handshake, program/preview and link transitions without opening the UI. `dotnet run --project windows\src\CueVideo.Spike -- ndi 4` lists the NDI sources currently on the network.
 
+## Configuration
+
+`%APPDATA%\CueVideo\config.json`, same schema as the macOS app (`atemHost`, `me`, `sources`, `cameras`, `keys`, `pictures`, `trackSpeed`, ...), with unknown keys preserved and a `config.last-good.json` fallback. On first run the audited booth setup is written as the default. `CUEVIDEO_CONFIG_DIR` points the app at another folder.
+
+Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; the app recalls 1-9 with their configured names ("Full Stage", "Sermon").
+
 ## Layout
 
 | Path | Purpose | Ported from |
@@ -59,6 +65,7 @@ dotnet run --project windows\src\CueVideo.App
 - **Live monitor** is the OBS program NDI feed ("OBS PGM"), not a DeckLink capture. The app never opens the DeckLink.
 - **Presets:** the app recalls 1-9 (same as the Stream Deck, 8 = Full Stage, 9 = Sermon / Crowd Wide) and only writes 20-39.
 - **UI stack:** Avalonia 12 on .NET 10 instead of SwiftUI; design tokens copied from `churchfront-kit`.
+- **Root `.gitignore`** anchors the macOS `.app` patterns (`/CueVideo.app/`). Windows Git folds case, so the unanchored pattern was silently ignoring `windows/src/CueVideo.App`.
 
 ## Gate checklist (see `../.opencode/plan/churchfront-windows-port.md`)
 

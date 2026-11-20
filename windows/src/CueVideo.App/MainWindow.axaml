@@ -1,0 +1,179 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="CueVideo.App.MainWindow"
+        Title="Churchfront Video"
+        Width="1500" Height="920"
+        MinWidth="1180" MinHeight="760"
+        Background="{StaticResource Canvas}"
+        WindowStartupLocation="CenterScreen">
+
+    <Grid RowDefinitions="Auto,*,Auto,Auto">
+
+        <!-- Header -->
+        <Border Grid.Row="0" Padding="22,16" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <TextBlock Text="CHURCHFRONT" FontSize="17" FontWeight="Bold" LetterSpacing="2.4" Foreground="{StaticResource Ink}" />
+                    <TextBlock Text="VIDEO · WINDOWS" FontSize="11" LetterSpacing="1.6" Foreground="{StaticResource InkDim}" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Border Background="{StaticResource Panel}" CornerRadius="20" Padding="12,6" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Ellipse x:Name="AtemDot" Width="7" Height="7" Fill="{StaticResource Amber}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="AtemChipText" Text="ATEM OFFLINE" FontSize="10.5" LetterSpacing="1.1" Foreground="{StaticResource InkDim}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource Panel}" CornerRadius="20" Padding="12,6" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Ellipse x:Name="NdiDot" Width="7" Height="7" Fill="{StaticResource Amber}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="NdiChipText" Text="NDI CHECKING" FontSize="10.5" LetterSpacing="1.1" Foreground="{StaticResource InkDim}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource Panel}" CornerRadius="20" Padding="12,6" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Ellipse Width="7" Height="7" Fill="{StaticResource Amber}" VerticalAlignment="Center" />
+                            <TextBlock Text="CAMERAS OFFLINE" FontSize="10.5" LetterSpacing="1.1" Foreground="{StaticResource InkDim}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main content -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,368" Margin="20,16,20,12">
+
+            <Grid Grid.Column="0" RowDefinitions="*,Auto" Margin="0,0,16,0">
+
+                <!-- Monitors -->
+                <Grid Grid.Row="0" ColumnDefinitions="3*,2*" ColumnSpacing="14">
+                    <Border Grid.Column="0" Classes="panel" ClipToBounds="True">
+                        <Grid RowDefinitions="Auto,*">
+                            <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="16,12,16,10">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                                    <Border Background="{StaticResource Program}" CornerRadius="4" Padding="7,3">
+                                        <TextBlock Text="PROGRAM" FontSize="10" FontWeight="Bold" LetterSpacing="1.2" Foreground="White" />
+                                    </Border>
+                                    <TextBlock x:Name="ProgramSource" Text="CAM 1" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="1080p30" Classes="label" VerticalAlignment="Center" />
+                            </Grid>
+                            <Border x:Name="ProgramHost" Grid.Row="1" Background="#050609" Margin="16,0,16,16" CornerRadius="6">
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
+                                    <TextBlock Text="NO SIGNAL" FontSize="13" LetterSpacing="2" Foreground="#3C4150" HorizontalAlignment="Center" />
+                                    <TextBlock Text="OBS program via NDI (gate 4)" FontSize="10.5" Foreground="#2C313D" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" Classes="panel" ClipToBounds="True">
+                        <Grid RowDefinitions="Auto,*">
+                            <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="16,12,16,10">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                                    <Border Background="{StaticResource Preview}" CornerRadius="4" Padding="7,3">
+                                        <TextBlock Text="NEXT" FontSize="10" FontWeight="Bold" LetterSpacing="1.2" Foreground="White" />
+                                    </Border>
+                                    <TextBlock x:Name="NextSource" Text="CAM 1" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="NDI" Classes="label" VerticalAlignment="Center" />
+                            </Grid>
+                            <Border x:Name="NextHost" Grid.Row="1" Background="#050609" Margin="16,0,16,16" CornerRadius="6">
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
+                                    <TextBlock Text="NO SIGNAL" FontSize="13" LetterSpacing="2" Foreground="#3C4150" HorizontalAlignment="Center" />
+                                    <TextBlock Text="camera NDI|HX stream (gate 1)" FontSize="10.5" Foreground="#2C313D" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- Sources -->
+                <UniformGrid x:Name="SourceRow" Grid.Row="1" Columns="6" Margin="0,14,0,0" />
+            </Grid>
+
+            <!-- Camera panel -->
+            <Border Grid.Column="1" Classes="panel" Padding="16">
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="CAMERA ON NEXT" Classes="label" />
+                            <TextBlock x:Name="CameraNextName" Text="Cam 1 · X4 Ultra" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="PTZ" Classes="label" VerticalAlignment="Bottom" />
+                    </Grid>
+
+                    <!-- D-pad -->
+                    <Grid Grid.Row="1" Margin="0,16,0,0" ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto,Auto"
+                          ColumnSpacing="6" RowSpacing="6">
+                        <Button x:Name="PanUpLeft" Grid.Row="0" Grid.Column="0" Classes="ghost" Content="↖" Height="44" />
+                        <Button x:Name="PanUp" Grid.Row="0" Grid.Column="1" Classes="ghost" Content="↑" Height="44" />
+                        <Button x:Name="PanUpRight" Grid.Row="0" Grid.Column="2" Classes="ghost" Content="↗" Height="44" />
+                        <Button x:Name="PanLeft" Grid.Row="1" Grid.Column="0" Classes="ghost" Content="←" Height="44" />
+                        <Button x:Name="PanHome" Grid.Row="1" Grid.Column="1" Classes="ghost" Content="HOME" FontSize="10" Height="44" />
+                        <Button x:Name="PanRight" Grid.Row="1" Grid.Column="2" Classes="ghost" Content="→" Height="44" />
+                        <Button x:Name="PanDownLeft" Grid.Row="2" Grid.Column="0" Classes="ghost" Content="↙" Height="44" />
+                        <Button x:Name="PanDown" Grid.Row="2" Grid.Column="1" Classes="ghost" Content="↓" Height="44" />
+                        <Button x:Name="PanDownRight" Grid.Row="2" Grid.Column="2" Classes="ghost" Content="↘" Height="44" />
+                    </Grid>
+
+                    <!-- Zoom / focus -->
+                    <Grid Grid.Row="2" ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,14,0,0">
+                        <StackPanel Grid.Column="0" Spacing="6">
+                            <TextBlock Text="ZOOM" Classes="label" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <Button x:Name="ZoomOutButton" Grid.Column="0" Classes="ghost" Content="−" FontSize="16" />
+                                <Button x:Name="ZoomInButton" Grid.Column="1" Classes="ghost" Content="+" FontSize="16" />
+                            </Grid>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="6">
+                            <TextBlock Text="FOCUS" Classes="label" />
+                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                                <Button x:Name="FocusNearButton" Grid.Column="0" Classes="ghost" Content="N" FontSize="12" />
+                                <Button x:Name="FocusAutoButton" Grid.Column="1" Classes="ghost" Content="A" FontSize="12" />
+                                <Button x:Name="FocusFarButton" Grid.Column="2" Classes="ghost" Content="F" FontSize="12" />
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Presets -->
+                    <StackPanel Grid.Row="3" Spacing="6" Margin="0,16,0,0">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="PRESETS" Classes="label" />
+                            <TextBlock Grid.Column="1" Text="recall 1–9 · save 20+" FontSize="10" Foreground="{StaticResource InkDim}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="6" RowSpacing="6">
+                            <Button x:Name="Preset1Button" Grid.Row="0" Grid.Column="0" Classes="ghost" Content="1" Height="38" />
+                            <Button x:Name="Preset2Button" Grid.Row="0" Grid.Column="1" Classes="ghost" Content="2" Height="38" />
+                            <Button x:Name="Preset3Button" Grid.Row="0" Grid.Column="2" Classes="ghost" Content="3" Height="38" />
+                            <Button x:Name="Preset4Button" Grid.Row="1" Grid.Column="0" Classes="ghost" Content="4" Height="38" />
+                            <Button x:Name="Preset5Button" Grid.Row="1" Grid.Column="1" Classes="ghost" Content="5" Height="38" />
+                            <Button x:Name="Preset6Button" Grid.Row="1" Grid.Column="2" Classes="ghost" Content="6" Height="38" />
+                            <Button x:Name="Preset7Button" Grid.Row="2" Grid.Column="0" Classes="ghost" Content="7" Height="38" />
+                            <Button x:Name="Preset8Button" Grid.Row="2" Grid.Column="1" Classes="ghost" Content="Full Stage" Height="38" FontSize="10.5" />
+                            <Button x:Name="Preset9Button" Grid.Row="2" Grid.Column="2" Classes="ghost" Content="Sermon" Height="38" FontSize="10.5" />
+                        </Grid>
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="4" Text="PAN 5 · TILT 5 · ZOOM 3" Classes="label" VerticalAlignment="Bottom" Margin="0,16,0,0" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Transport -->
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="10" Margin="20,0,20,14">
+            <Button x:Name="CutButton" Grid.Column="0" Classes="transport" Content="CUT" Width="150" />
+            <Button x:Name="AutoButton" Grid.Column="1" Classes="transport" Content="AUTO" Width="150" />
+            <Button x:Name="BlackButton" Grid.Column="2" Classes="transport" Content="BLACK" Width="150" />
+            <UniformGrid x:Name="KeyRow" Grid.Column="3" Columns="4" HorizontalAlignment="Right" />
+        </Grid>
+
+        <!-- Footer -->
+        <Border Grid.Row="3" Padding="22,10" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock x:Name="FooterStatus" Grid.Column="0" Text="Connecting to the switcher…" FontSize="11" Foreground="{StaticResource InkDim}" />
+                <TextBlock Grid.Column="1" Text="0.1.0 · spike" FontSize="11" Foreground="{StaticResource InkDim}" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
