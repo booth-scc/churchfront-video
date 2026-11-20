@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\CueVideo.Atem\CueVideo.Atem.csproj" />
+    <ProjectReference Include="..\CueVideo.Visca\CueVideo.Visca.csproj" />
+    <ProjectReference Include="..\CueVideo.Ndi\CueVideo.Ndi.csproj" />
+    <ProjectReference Include="..\CueVideo.Vision\CueVideo.Vision.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
