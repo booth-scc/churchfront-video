@@ -4,7 +4,7 @@ C#/.NET port of the macOS SwiftUI app in `../Sources`, aimed at the booth's Wind
 
 ## Status
 
-Phase 0/1 in progress. The ATEM client works (handshake, state, dedup, commands) and is covered by unit tests plus a fake switcher. The Avalonia shell shows live program/preview and the ATEM link. NDI and VISCA are still empty projects.
+Phase 0/1 in progress. The ATEM client works (handshake, state, dedup, commands) and NDI send/receive works end to end (P/Invoke to the NDI 6 runtime, discovery, BGRX frames into the UI). Both are covered by tests, including a loopback NDI sender. VISCA is still an empty project.
 
 ## Requirements
 
@@ -25,15 +25,19 @@ The app connects to `192.168.10.159` by default; override it with `CUEVIDEO_ATEM
 ## Working without the switcher or cameras
 
 ```powershell
-# terminal 1: a stand-in ATEM on loopback
+# terminal 1: a stand-in ATEM on loopback and a moving NDI test pattern
 dotnet run --project windows\src\CueVideo.Spike -- fake-atem 9910
+dotnet run --project windows\src\CueVideo.Spike -- fake-ndi "CueVideo Test Pattern" 300
 
-# terminal 2: point the UI at it
+# terminal 2: point the UI at them
 $env:CUEVIDEO_ATEM = "127.0.0.1"
+$env:CUEVIDEO_NDI_NEXT = "CueVideo Test Pattern"
 dotnet run --project windows\src\CueVideo.App
 ```
 
-`dotnet run --project windows\src\CueVideo.Spike -- atem 192.168.10.159 8` prints the real handshake, program/preview and link transitions without opening the UI.
+`CUEVIDEO_NDI_LIVE` works the same way and should point at `OBS PGM` once DistroAV's program output is enabled. Leave both unset for the plain shell.
+
+`dotnet run --project windows\src\CueVideo.Spike -- atem 192.168.10.159 8` prints the real handshake, program/preview and link transitions without opening the UI. `dotnet run --project windows\src\CueVideo.Spike -- ndi 4` lists the NDI sources currently on the network.
 
 ## Layout
 

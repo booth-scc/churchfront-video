@@ -1,4 +1,5 @@
 ﻿using CueVideo.Atem;
+using CueVideo.Ndi;
 using System.Runtime.InteropServices;
 
 namespace CueVideo.Spike;
@@ -31,7 +32,11 @@ internal static class Program
             ? Atem(args.Skip(1).ToArray())
             : args.Length > 0 && args[0].Equals("fake-atem", StringComparison.OrdinalIgnoreCase)
                 ? FakeAtem(args.Skip(1).ToArray())
-                : Doctor();
+                : args.Length > 0 && args[0].Equals("ndi", StringComparison.OrdinalIgnoreCase)
+                    ? NdiProbe(args.Skip(1).ToArray())
+                    : args.Length > 0 && args[0].Equals("fake-ndi", StringComparison.OrdinalIgnoreCase)
+                        ? NdiTestPattern.Run(args.Skip(1).ToArray())
+                        : Doctor();
     }
 
     private static int Doctor()
@@ -98,6 +103,70 @@ internal static class Program
         var port = args.Length > 0 && int.TryParse(args[0], out var parsed) ? parsed : 9910;
         FakeSwitcher.Run(port);
         return 0;
+    }
+
+    private static int NdiProbe(string[] args)
+    {
+        var seconds = args.Length > 0 && int.TryParse(args[0], out var parsed) ? parsed : 4;
+
+        if (!NdiRuntime.Initialize())
+        {
+            Console.WriteLine($"NDI runtime : {NdiRuntime.Error}");
+            return 2;
+        }
+
+        Console.WriteLine($"NDI runtime : {NdiRuntime.RuntimePath}");
+
+        using var finder = NdiFinder.Create(showLocalSources: true);
+        var sources = finder.GetSources(TimeSpan.FromSeconds(seconds));
+
+        Console.WriteLine($"Sources     : {sources.Count}");
+        foreach (var source in sources)
+        {
+            Console.WriteLine($"  - {source.Name}   (short: {source.ShortName})");
+        }
+
+        var target = args.Length > 1
+            ? sources.FirstOrDefault(s => s.Name.Contains(args[1], StringComparison.OrdinalIgnoreCase))
+            : sources.FirstOrDefault(s => s.ShortName.Contains("OBS", StringComparison.OrdinalIgnoreCase));
+
+        if (target is null)
+        {
+            Console.WriteLine();
+            Console.WriteLine("No source selected. Pass part of a name to receive frames, for example: ndi 4 OBS");
+            return 0;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"Receiving from {target.Name} for {seconds}s ...");
+
+        using var receiver = NdiReceiver.Open(target.Name, lowestBandwidth: false);
+        var frames = 0;
+        var firstWidth = 0;
+        var firstHeight = 0;
+        var fourCc = "";
+        var until = DateTime.UtcNow.AddSeconds(seconds);
+
+        while (DateTime.UtcNow < until)
+        {
+            receiver.TryCapture(250, (in NdiFrameView frame) =>
+            {
+                if (frames == 0)
+                {
+                    firstWidth = frame.Width;
+                    firstHeight = frame.Height;
+                    fourCc = frame.FourCc;
+                }
+
+                frames++;
+            });
+        }
+
+        Console.WriteLine(frames > 0
+            ? $"Frames      : {frames} ({frames / (double)seconds:0.0}/s), {firstWidth}x{firstHeight} {fourCc}"
+            : "Frames      : none - sender unreachable or wrong name");
+
+        return frames > 0 ? 0 : 3;
     }
 
     private static string Describe(AtemState state)

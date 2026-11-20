@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\CueVideo.Core\CueVideo.Core.csproj" />
     <ProjectReference Include="..\..\src\CueVideo.Atem\CueVideo.Atem.csproj" />
     <ProjectReference Include="..\..\src\CueVideo.Visca\CueVideo.Visca.csproj" />
+    <ProjectReference Include="..\..\src\CueVideo.Ndi\CueVideo.Ndi.csproj" />
   </ItemGroup>
 
 </Project>
