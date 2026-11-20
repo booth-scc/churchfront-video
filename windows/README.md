@@ -4,7 +4,7 @@ C#/.NET port of the macOS SwiftUI app in `../Sources`, aimed at the booth's Wind
 
 ## Status
 
-Phase 0/1 in progress. ATEM control and NDI send/receive work end to end, VISCA over IP (UDP 52381) is implemented with a fake-camera test suite, and the operator UI is wired: source buttons set preview, CUT/AUTO/BLACK/keys send commands, tally colours come from the switcher, and the camera panel drives the camera on Next (D-pad, zoom, focus, presets). The operator screen follows the macOS layout: NEXT left, LIVE right, pick-what's-next row, shots grid, framing pad, take-it-live column, Figtree type. Settings and the tracker are still to come.
+Phase 0/1 in progress. ATEM control and NDI send/receive work end to end, VISCA over IP (UDP 52381) is implemented with a fake-camera test suite, and the operator UI is wired. The default screen is deliberately reduced to three jobs for a first-time volunteer - pick what's next, frame it, take it live - with exposure, focus, keys and presets behind one "More…" button. Settings and the tracker are still to come.
 
 ## Requirements
 

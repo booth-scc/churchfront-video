@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CueVideo.Atem;
@@ -13,28 +15,21 @@ namespace CueVideo.App;
 
 public partial class MainWindow : Window
 {
-    private static readonly IBrush OnlineBrush = new SolidColorBrush(Color.Parse("#2FA84F"));
-    private static readonly IBrush ConnectingBrush = new SolidColorBrush(Color.Parse("#D79A2B"));
-    private static readonly IBrush OfflineBrush = new SolidColorBrush(Color.Parse("#E0362C"));
-    private static readonly IBrush IdleBrush = new SolidColorBrush(Color.Parse("#8A90A0"));
+    private static readonly IBrush OnlineBrush = new SolidColorBrush(Color.Parse("#6FCF7A"));
+    private static readonly IBrush ConnectingBrush = new SolidColorBrush(Color.Parse("#F2C14E"));
+    private static readonly IBrush OfflineBrush = new SolidColorBrush(Color.Parse("#E0453A"));
 
     private static readonly IBrush SourceIdle = new SolidColorBrush(Color.Parse("#1A1C20"));
     private static readonly IBrush TallyProgram = new SolidColorBrush(Color.Parse("#E0453A"));
     private static readonly IBrush TallyPreview = new SolidColorBrush(Color.Parse("#6FCF7A"));
-    private static readonly IBrush TallyKeyOn = new SolidColorBrush(Color.Parse("#F2C14E"));
     private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#F4F5F7"));
-    private static readonly IBrush ChipInk = new SolidColorBrush(Color.Parse("#0A0A0C"));
+    private static readonly IBrush InkDim = new SolidColorBrush(Color.Parse("#9AA0AA"));
 
     private readonly ConfigStore _config = new();
     private readonly Dictionary<int, Button> _sourceButtons = [];
-    private readonly Dictionary<KeyButtonConfig, Button> _keyButtons = [];
-    private readonly Dictionary<int, Button> _presetButtons = [];
     private readonly Dictionary<int, ViscaIpLink> _links = [];
-    private readonly List<(int? Input, string Name, Button Button)> _cameraChips = [];
 
     private AtemClient? _atem;
-    private NdiFinder? _finder;
-    private CancellationTokenSource? _ndiPoll;
     private NdiView? _liveView;
     private NdiView? _nextView;
     private string? _nextNdiName;
@@ -56,8 +51,6 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(host)) host = _config.Config.AtemHost;
 
         BuildSourceRow();
-        BuildCameraChips();
-        BuildKeyRow();
         WireTransport();
         WireCameraPanel();
 
@@ -67,20 +60,12 @@ public partial class MainWindow : Window
         _atem.Connect(host);
 
         AttachLive();
-        StartNdiPolling();
 
-        FooterStatus.Text = _config.FileError ?? $"Connecting to ATEM at {host}…";
+        StatusText.Text = _config.FileError ?? $"Connecting to {host}…";
     }
 
     private void OnClosed(object? sender, EventArgs e)
     {
-        _ndiPoll?.Cancel();
-        _ndiPoll?.Dispose();
-        _ndiPoll = null;
-
-        _finder?.Dispose();
-        _finder = null;
-
         _liveView?.Dispose();
         _nextView?.Dispose();
         _liveView = null;
@@ -113,17 +98,17 @@ public partial class MainWindow : Window
             {
                 Content = string.IsNullOrWhiteSpace(source.Label) ? source.Input.ToString() : source.Label,
                 Tag = source.Input,
-                Margin = new Thickness(0, 0, 6, 0),
+                Margin = new Thickness(0, 0, 7, 0),
                 Foreground = Ink,
                 Background = SourceIdle,
                 BorderBrush = new SolidColorBrush(Color.Parse("#23252A")),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(10, 12),
-                FontSize = 12,
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(10, 10),
+                FontSize = 13,
                 FontWeight = FontWeight.SemiBold,
-                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
-                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
             };
 
             var input = source.Input;
@@ -132,95 +117,6 @@ public partial class MainWindow : Window
             _sourceButtons[input] = button;
             SourceRow.Children.Add(button);
         }
-    }
-
-    private void BuildCameraChips()
-    {
-        CameraChips.Children.Clear();
-        _cameraChips.Clear();
-
-        foreach (var camera in _config.Config.Cameras)
-        {
-            var chip = new Button
-            {
-                Content = camera.Name,
-                Tag = camera.AtemInput,
-                Background = SourceIdle,
-                Foreground = Ink,
-                BorderBrush = new SolidColorBrush(Color.Parse("#23252A")),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(999),
-                Padding = new Thickness(11, 5),
-                FontSize = 10.5,
-                FontWeight = FontWeight.SemiBold,
-            };
-
-            if (camera.AtemInput is { } input)
-            {
-                chip.Click += (_, _) => _atem?.SetPreview(input);
-            }
-
-            _cameraChips.Add((camera.AtemInput, camera.Name, chip));
-            CameraChips.Children.Add(chip);
-        }
-    }
-
-    private void UpdateCameraChips()
-    {
-        foreach (var (input, name, chip) in _cameraChips)
-        {
-            var onNext = input == _nextInput;
-            chip.Content = onNext ? $"{name} · ON NEXT" : name;
-            chip.Background = onNext ? TallyPreview : SourceIdle;
-            chip.Foreground = onNext ? ChipInk : Ink;
-        }
-    }
-
-    private void BuildKeyRow()
-    {
-        KeyRow.Children.Clear();
-        _keyButtons.Clear();
-
-        foreach (var key in _config.Config.Keys)
-        {
-            var button = new Button
-            {
-                Content = key.Label,
-                Tag = key,
-                Margin = new Thickness(3),
-                Height = 40,
-                MinWidth = 0,
-                FontSize = 10.5,
-                FontWeight = FontWeight.Bold,
-                Foreground = Ink,
-                Background = SourceIdle,
-                BorderThickness = new Thickness(0),
-                CornerRadius = new CornerRadius(10),
-                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-            };
-
-            button.Click += (_, _) => ToggleKey(key);
-
-            _keyButtons[key] = button;
-            KeyRow.Children.Add(button);
-        }
-    }
-
-    private void ToggleKey(KeyButtonConfig key)
-    {
-        var state = _atem?.State;
-
-        if (key.Dsk is { } dsk)
-        {
-            var on = state?.DskOnAir.GetValueOrDefault(dsk) ?? false;
-            _atem?.SetDskOnAir(dsk, !on);
-            return;
-        }
-
-        var me = (key.Me ?? 1) - 1;
-        var keyer = key.Keyer ?? 0;
-        var keyOn = state?.KeyOnAir.TryGetValue(me, out var keys) == true && keys.GetValueOrDefault(keyer);
-        _atem?.SetKeyOnAir(keyer, !keyOn, me);
     }
 
     private void WireTransport()
@@ -232,33 +128,10 @@ public partial class MainWindow : Window
         BlackButton.Click += (_, _) => _atem?.FadeToBlack(me);
     }
 
-    // ---- Cameras ----
+    // ---- Camera ----
 
     private void WireCameraPanel()
     {
-        _presetButtons[1] = Preset1Button;
-        _presetButtons[2] = Preset2Button;
-        _presetButtons[3] = Preset3Button;
-        _presetButtons[4] = Preset4Button;
-        _presetButtons[5] = Preset5Button;
-        _presetButtons[6] = Preset6Button;
-        _presetButtons[7] = Preset7Button;
-
-        foreach (var (number, button) in _presetButtons)
-        {
-            var preset = number;
-            button.Click += (_, _) => Link()?.Recall(preset);
-        }
-
-        ExposureAutoButton.Click += async (_, _) =>
-        {
-            if (Link() is { } link)
-            {
-                await link.AutoExposureAsync();
-                await ReadExposureAsync();
-            }
-        };
-
         Hold(PanUpLeft, () => Link()?.Drive(-1, 1), () => Link()?.StopMove());
         Hold(PanUp, () => Link()?.Drive(0, 1), () => Link()?.StopMove());
         Hold(PanUpRight, () => Link()?.Drive(1, 1), () => Link()?.StopMove());
@@ -268,12 +141,10 @@ public partial class MainWindow : Window
         Hold(PanDown, () => Link()?.Drive(0, -1), () => Link()?.StopMove());
         Hold(PanDownRight, () => Link()?.Drive(1, -1), () => Link()?.StopMove());
 
-        PanHome.Click += (_, _) => Link()?.Home();
         ZoomInButton.Click += (_, _) => Link()?.Zoom(0.6);
         ZoomOutButton.Click += (_, _) => Link()?.Zoom(-0.6);
-        Hold(FocusNearButton, () => Link()?.FocusNear(), () => Link()?.StopFocus());
-        Hold(FocusFarButton, () => Link()?.FocusFar(), () => Link()?.StopFocus());
-        FocusAutoButton.Click += (_, _) => Link()?.AutoFocus(true);
+        HomeButton.Click += (_, _) => Link()?.Home();
+        MoreButton.Click += (_, _) => OpenMore();
     }
 
     private static void Hold(Button button, Action start, Action stop)
@@ -298,97 +169,55 @@ public partial class MainWindow : Window
         return link;
     }
 
-    private void BuildShotRows()
+    private void BuildShots()
     {
-        ShotRows.Children.Clear();
+        ShotPanel.Children.Clear();
 
-        foreach (var camera in _config.Config.Cameras)
+        var camera = _config.Config.CameraForInput(_nextInput);
+        if (camera is null) return;
+
+        foreach (var preset in new[] { 8, 9 })
         {
-            if (camera.AtemInput is not { } input) continue;
+            var label = preset == 8
+                ? (camera.PresetName(8) == "8" ? "Full Stage" : camera.PresetName(8))
+                : (camera.PresetName(9) == "9" ? "Sermon" : camera.PresetName(9));
 
-            var row = new Grid
+            var button = new Button
             {
-                ColumnDefinitions = new ColumnDefinitions("62,*,*"),
-                ColumnSpacing = 6,
+                Content = label,
+                Height = 46,
+                FontSize = 12,
+                Classes = { "shot" },
             };
 
-            var name = new TextBlock
-            {
-                Text = camera.Name,
-                FontSize = 10,
-                Foreground = input == _nextInput ? TallyPreview : new SolidColorBrush(Color.Parse("#9AA0AA")),
-                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-            };
-
-            row.Children.Add(name);
-
-            var column = 1;
-            foreach (var presetNumber in new[] { 8, 9 })
-            {
-                var label = camera.PresetName(presetNumber);
-                if (label == presetNumber.ToString())
-                {
-                    label = presetNumber == 8 ? "Full Stage" : "Sermon";
-                }
-
-                var button = new Button
-                {
-                    Content = label,
-                    Height = 30,
-                    FontSize = 10,
-                    Classes = { "shot" },
-                };
-
-                var slot = presetNumber;
-                button.Click += (_, _) => LinkFor(input)?.Recall(slot);
-
-                Grid.SetColumn(button, column++);
-                row.Children.Add(button);
-            }
-
-            ShotRows.Children.Add(row);
+            var slot = preset;
+            button.Click += (_, _) => Link()?.Recall(slot);
+            ShotPanel.Children.Add(button);
         }
     }
 
-    private async Task ReadExposureAsync()
+    private async Task ShowExposureAsync(TextBlock gain, TextBlock shutter, TextBlock iris, TextBlock white)
     {
         var link = Link();
         if (link is null)
         {
-            ExposureGain.Text = ExposureShutter.Text = ExposureIris.Text = ExposureWhite.Text = "—";
+            gain.Text = shutter.Text = iris.Text = white.Text = "—";
             return;
         }
 
         var exposure = await link.ReadExposureAsync(TimeSpan.FromMilliseconds(1500));
         if (exposure is null) return;
 
-        ExposureGain.Text = exposure.Gain is { } gain ? $"{gain} dB" : "Auto";
-        ExposureShutter.Text = exposure.Shutter is { } shutter ? $"1/{shutter:0}" : "Auto";
-        ExposureIris.Text = exposure.Iris is { } iris ? $"f/{iris / 100.0:0.#}" : "Auto";
-        ExposureWhite.Text = exposure.WhiteBalance switch
+        gain.Text = exposure.Gain is { } value ? $"{value} dB" : "Auto";
+        shutter.Text = exposure.Shutter is { } s ? $"1/{s:0}" : "Auto";
+        iris.Text = exposure.Iris is { } i ? $"f/{i / 100.0:0.#}" : "Auto";
+        white.Text = exposure.WhiteBalance switch
         {
             "auto" => "Auto",
             "kelvin" => exposure.Kelvin is { } kelvin ? $"{kelvin} K" : "Kelvin",
             null => "—",
             var mode => mode,
         };
-    }
-
-    private void UpdateCameraPanel()
-    {
-        var camera = _config.Config.CameraForInput(_nextInput);
-
-        CameraNextName.Text = camera?.Name ?? _atem?.State.Name(_nextInput) ?? "—";
-
-        UpdateCameraChips();
-        BuildShotRows();
-
-        foreach (var (number, button) in _presetButtons)
-        {
-            button.Content = number.ToString();
-        }
-
-        _ = ReadExposureAsync();
     }
 
     // ---- Pictures ----
@@ -434,65 +263,17 @@ public partial class MainWindow : Window
         _nextView.Start();
     }
 
-    private void StartNdiPolling()
-    {
-        if (!NdiRuntime.Initialize())
-        {
-            NdiChipText.Text = "NDI UNAVAILABLE";
-            return;
-        }
-
-        try
-        {
-            _finder = NdiFinder.Create(showLocalSources: true);
-        }
-        catch (Exception ex)
-        {
-            NdiChipText.Text = $"NDI: {ex.Message}";
-            return;
-        }
-
-        _ndiPoll = new CancellationTokenSource();
-        var token = _ndiPoll.Token;
-
-        _ = Task.Run(() =>
-        {
-            while (!token.IsCancellationRequested)
-            {
-                var sources = _finder.GetSources(TimeSpan.FromSeconds(2));
-                Dispatcher.UIThread.Post(() => ShowNdiSources(sources));
-            }
-        }, token);
-    }
-
-    private void ShowNdiSources(IReadOnlyList<NdiSourceInfo> sources)
-    {
-        NdiChipText.Text = sources.Count switch
-        {
-            0 => "NO NDI SOURCES",
-            1 => "1 NDI SOURCE",
-            _ => $"{sources.Count} NDI SOURCES",
-        };
-
-        NdiDot.Fill = sources.Count > 0 ? OnlineBrush : ConnectingBrush;
-    }
-
     // ---- State ----
 
     private void ShowLink(AtemLink link)
     {
-        var (text, brush) = link.State switch
+        (StatusDot.Fill, StatusText.Text) = link.State switch
         {
-            AtemLinkState.Online => ("ATEM ONLINE", OnlineBrush),
-            AtemLinkState.Connecting => ("ATEM CONNECTING", ConnectingBrush),
-            AtemLinkState.Offline => ("ATEM OFFLINE", OfflineBrush),
-            _ => ("ATEM IDLE", IdleBrush),
+            AtemLinkState.Online => (OnlineBrush, "Ready"),
+            AtemLinkState.Connecting => (ConnectingBrush, "Connecting…"),
+            AtemLinkState.Offline => (OfflineBrush, "Switcher offline"),
+            _ => (ConnectingBrush, "Starting…"),
         };
-
-        AtemChipText.Text = text;
-        AtemDot.Fill = brush;
-
-        if (link.Message.Length > 0) FooterStatus.Text = link.Message;
     }
 
     private void ShowState(AtemState state)
@@ -507,19 +288,16 @@ public partial class MainWindow : Window
 
         UpdateTally(state);
 
-        var product = state.Product.Length > 0 ? state.Product : "ATEM";
-        var version = state.Version.Length > 0 ? $" · v{state.Version}" : "";
-        var transition = state.InTransition.GetValueOrDefault(0) ? " · transition running" : "";
-        FooterStatus.Text = $"{product}{version} · PGM {state.Name(state.Program.GetValueOrDefault(0))} / PVW {state.Name(preview)}{transition}";
-
         if (changed)
         {
-            UpdateCameraPanel();
+            var camera = _config.Config.CameraForInput(_nextInput);
+            CameraNextName.Text = camera?.Name ?? state.Name(_nextInput);
+
+            BuildShots();
             UpdateNextTile();
         }
-
-        UpdateKeyButtons(state);
     }
+
     private void UpdateTally(AtemState state)
     {
         foreach (var (input, button) in _sourceButtons)
@@ -541,18 +319,166 @@ public partial class MainWindow : Window
         }
     }
 
-    private void UpdateKeyButtons(AtemState state)
-    {
-        foreach (var (config, button) in _keyButtons)
-        {
-            var on = config.Dsk is { } dsk
-                ? state.DskOnAir.GetValueOrDefault(dsk)
-                : (config.Me ?? 1) - 1 is var me &&
-                  state.KeyOnAir.TryGetValue(me, out var keys) &&
-                  keys.GetValueOrDefault(config.Keyer ?? 0);
+    // ---- More ----
 
-            button.Background = on ? TallyKeyOn : SourceIdle;
-            button.Foreground = on ? Brushes.Black : Ink;
+    private void OpenMore()
+    {
+        var dialog = new Window
+        {
+            Title = "More controls",
+            Width = 460,
+            Height = 600,
+            CanResize = false,
+            Background = new SolidColorBrush(Color.Parse("#0A0A0C")),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        };
+
+        var panel = new StackPanel { Spacing = 12, Margin = new Thickness(22) };
+        panel.Children.Add(Heading("EXPOSURE"));
+
+        var exposure = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("80,*"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
+            RowSpacing = 4,
+        };
+
+        var gain = ValueText();
+        var shutter = ValueText();
+        var iris = ValueText();
+        var white = ValueText();
+
+        AddRow(exposure, 0, "Gain", gain);
+        AddRow(exposure, 1, "Shutter", shutter);
+        AddRow(exposure, 2, "Iris", iris);
+        AddRow(exposure, 3, "White", white);
+        panel.Children.Add(exposure);
+
+        var autoExposure = Ghost("Auto exposure");
+        autoExposure.Click += async (_, _) =>
+        {
+            if (Link() is { } link)
+            {
+                await link.AutoExposureAsync();
+                await ShowExposureAsync(gain, shutter, iris, white);
+            }
+        };
+        panel.Children.Add(autoExposure);
+
+        panel.Children.Add(Heading("FOCUS"));
+        var focusRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var near = Ghost("Near");
+        var auto = Ghost("Auto");
+        var far = Ghost("Far");
+        Hold(near, () => Link()?.FocusNear(), () => Link()?.StopFocus());
+        Hold(far, () => Link()?.FocusFar(), () => Link()?.StopFocus());
+        auto.Click += (_, _) => Link()?.AutoFocus(true);
+        focusRow.Children.Add(near);
+        focusRow.Children.Add(auto);
+        focusRow.Children.Add(far);
+        panel.Children.Add(focusRow);
+
+        panel.Children.Add(Heading("KEYS"));
+        var keys = new UniformGrid { Columns = 2 };
+        foreach (var key in _config.Config.Keys)
+        {
+            var button = new Button
+            {
+                Content = key.Label,
+                Height = 42,
+                Margin = new Thickness(0, 0, 6, 6),
+                Classes = { "ghost" },
+                FontSize = 11,
+            };
+
+            var configKey = key;
+            button.Click += (_, _) => ToggleKey(configKey);
+            keys.Children.Add(button);
         }
+        panel.Children.Add(keys);
+
+        panel.Children.Add(Heading("PRESETS 1-9"));
+        var presets = new UniformGrid { Columns = 3 };
+        for (var number = 1; number <= 9; number++)
+        {
+            var button = new Button
+            {
+                Content = number.ToString(),
+                Height = 40,
+                Margin = new Thickness(0, 0, 6, 6),
+                Classes = { "ghost" },
+                FontSize = 11,
+            };
+
+            var preset = number;
+            button.Click += (_, _) => Link()?.Recall(preset);
+            presets.Children.Add(button);
+        }
+        panel.Children.Add(presets);
+
+        dialog.Content = new ScrollViewer { Content = panel };
+        dialog.ShowDialog(this);
+
+        _ = ShowExposureAsync(gain, shutter, iris, white);
     }
+
+    private void ToggleKey(KeyButtonConfig key)
+    {
+        var state = _atem?.State;
+
+        if (key.Dsk is { } dsk)
+        {
+            var on = state?.DskOnAir.GetValueOrDefault(dsk) ?? false;
+            _atem?.SetDskOnAir(dsk, !on);
+            return;
+        }
+
+        var me = (key.Me ?? 1) - 1;
+        var keyer = key.Keyer ?? 0;
+        var keyOn = state?.KeyOnAir.TryGetValue(me, out var keys) == true && keys.GetValueOrDefault(keyer);
+        _atem?.SetKeyOnAir(keyer, !keyOn, me);
+    }
+
+    private static TextBlock Heading(string text) => new()
+    {
+        Text = text,
+        FontSize = 10,
+        LetterSpacing = 1.6,
+        FontWeight = FontWeight.SemiBold,
+        Foreground = new SolidColorBrush(Color.Parse("#767C87")),
+        Margin = new Thickness(0, 6, 0, 0),
+    };
+
+    private static TextBlock ValueText() => new()
+    {
+        Text = "—",
+        FontSize = 11,
+        Foreground = new SolidColorBrush(Color.Parse("#9AA0AA")),
+    };
+
+    private static void AddRow(Grid grid, int row, string label, TextBlock value)
+    {
+        var name = new TextBlock
+        {
+            Text = label,
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Color.Parse("#767C87")),
+        };
+
+        Grid.SetRow(name, row);
+        Grid.SetColumn(name, 0);
+        Grid.SetRow(value, row);
+        Grid.SetColumn(value, 1);
+        grid.Children.Add(name);
+        grid.Children.Add(value);
+    }
+
+    private static Button Ghost(string text) => new()
+    {
+        Content = text,
+        Height = 36,
+        FontSize = 11,
+        Classes = { "ghost" },
+        HorizontalAlignment = HorizontalAlignment.Stretch,
+    };
 }
