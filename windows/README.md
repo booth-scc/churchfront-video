@@ -25,17 +25,16 @@ The app connects to `192.168.10.159` by default; override it with `CUEVIDEO_ATEM
 ## Working without the switcher or cameras
 
 ```powershell
-# terminal 1: a stand-in ATEM on loopback and a moving NDI test pattern
+# terminal 1: a stand-in ATEM on loopback and six clearly different NDI feeds
 dotnet run --project windows\src\CueVideo.Spike -- fake-atem 9910
-dotnet run --project windows\src\CueVideo.Spike -- fake-ndi "CueVideo Test Pattern" 300
+dotnet run --project windows\src\CueVideo.Spike -- fake-ndi-multi 6 7200
 
 # terminal 2: point the UI at them
 $env:CUEVIDEO_ATEM = "127.0.0.1"
-$env:CUEVIDEO_NDI_NEXT = "CueVideo Test Pattern"
 dotnet run --project windows\src\CueVideo.App
 ```
 
-`CUEVIDEO_NDI_LIVE` works the same way and should point at `OBS PGM` once DistroAV's program output is enabled. Leave both unset for the plain shell.
+The six fake feeds are named `CueVideo CAM1` … `CueVideo CAM6`; map them to inputs in `pictures` in the config. `CUEVIDEO_NDI_NEXT` / `CUEVIDEO_NDI_LIVE` still override a tile with one fixed source when needed.
 
 `dotnet run --project windows\src\CueVideo.Spike -- atem 192.168.10.159 8` prints the real handshake, program/preview and link transitions without opening the UI. `dotnet run --project windows\src\CueVideo.Spike -- ndi 4` lists the NDI sources currently on the network.
 

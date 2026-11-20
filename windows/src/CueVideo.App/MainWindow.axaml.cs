@@ -38,7 +38,9 @@ public partial class MainWindow : Window
     private NdiView? _liveView;
     private NdiView? _nextView;
     private string? _nextNdiName;
+    private string? _liveNdiName;
     private int _nextInput = 1;
+    private int _programInput = 1;
     private bool _initialised;
     private double _speed = 1.0;
 
@@ -334,10 +336,31 @@ public partial class MainWindow : Window
 
     private void AttachLive()
     {
-        var source = Environment.GetEnvironmentVariable("CUEVIDEO_NDI_LIVE");
-        if (string.IsNullOrWhiteSpace(source)) return;
+        UpdateLiveTile(_programInput);
+    }
 
-        _liveView = new NdiView(source, $"WAITING FOR PROGRAM NDI\n{source}");
+    private void UpdateLiveTile(int program)
+    {
+        var source = Environment.GetEnvironmentVariable("CUEVIDEO_NDI_LIVE");
+
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            source = _config.Config.Pictures.TryGetValue(program.ToString(), out var picture) ? picture : null;
+        }
+
+        if (string.Equals(source, _liveNdiName, StringComparison.OrdinalIgnoreCase)) return;
+
+        _liveNdiName = source;
+        _liveView?.Dispose();
+        _liveView = null;
+
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            ProgramHost.Child = null;
+            return;
+        }
+
+        _liveView = new NdiView(source, $"WAITING FOR LIVE NDI\n{source}");
         ProgramHost.Child = _liveView;
         _liveView.Start();
     }
@@ -391,13 +414,20 @@ public partial class MainWindow : Window
         ProgramSource.Text = state.Name(state.Program.GetValueOrDefault(0));
         NextSource.Text = state.Name(state.Preview.GetValueOrDefault(0));
 
+        var program = state.Program.GetValueOrDefault(0);
         var preview = state.Preview.GetValueOrDefault(0);
+
         var changed = preview != _nextInput || !_initialised;
+        var programChanged = program != _programInput || !_initialised;
+
         _initialised = true;
         _nextInput = preview;
+        _programInput = program;
 
         UpdateTally(state);
         UpdateSwitcherLabels(state);
+
+        if (programChanged) UpdateLiveTile(program);
 
         if (!changed) return;
 
