@@ -18,17 +18,19 @@ public partial class MainWindow : Window
     private static readonly IBrush OfflineBrush = new SolidColorBrush(Color.Parse("#E0362C"));
     private static readonly IBrush IdleBrush = new SolidColorBrush(Color.Parse("#8A90A0"));
 
-    private static readonly IBrush SourceIdle = new SolidColorBrush(Color.Parse("#1C1F27"));
-    private static readonly IBrush TallyProgram = new SolidColorBrush(Color.Parse("#E0362C"));
-    private static readonly IBrush TallyPreview = new SolidColorBrush(Color.Parse("#2FA84F"));
-    private static readonly IBrush TallyKeyOn = new SolidColorBrush(Color.Parse("#D79A2B"));
-    private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#F2F4F8"));
+    private static readonly IBrush SourceIdle = new SolidColorBrush(Color.Parse("#1A1C20"));
+    private static readonly IBrush TallyProgram = new SolidColorBrush(Color.Parse("#E0453A"));
+    private static readonly IBrush TallyPreview = new SolidColorBrush(Color.Parse("#6FCF7A"));
+    private static readonly IBrush TallyKeyOn = new SolidColorBrush(Color.Parse("#F2C14E"));
+    private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#F4F5F7"));
+    private static readonly IBrush ChipInk = new SolidColorBrush(Color.Parse("#0A0A0C"));
 
     private readonly ConfigStore _config = new();
     private readonly Dictionary<int, Button> _sourceButtons = [];
     private readonly Dictionary<KeyButtonConfig, Button> _keyButtons = [];
     private readonly Dictionary<int, Button> _presetButtons = [];
     private readonly Dictionary<int, ViscaIpLink> _links = [];
+    private readonly List<(int? Input, string Name, Button Button)> _cameraChips = [];
 
     private AtemClient? _atem;
     private NdiFinder? _finder;
@@ -54,6 +56,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(host)) host = _config.Config.AtemHost;
 
         BuildSourceRow();
+        BuildCameraChips();
         BuildKeyRow();
         WireTransport();
         WireCameraPanel();
@@ -113,9 +116,10 @@ public partial class MainWindow : Window
                 Margin = new Thickness(0, 0, 6, 0),
                 Foreground = Ink,
                 Background = SourceIdle,
-                BorderThickness = new Thickness(0),
+                BorderBrush = new SolidColorBrush(Color.Parse("#23252A")),
+                BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(10, 14),
+                Padding = new Thickness(10, 12),
                 FontSize = 12,
                 FontWeight = FontWeight.SemiBold,
                 HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
@@ -130,6 +134,48 @@ public partial class MainWindow : Window
         }
     }
 
+    private void BuildCameraChips()
+    {
+        CameraChips.Children.Clear();
+        _cameraChips.Clear();
+
+        foreach (var camera in _config.Config.Cameras)
+        {
+            var chip = new Button
+            {
+                Content = camera.Name,
+                Tag = camera.AtemInput,
+                Background = SourceIdle,
+                Foreground = Ink,
+                BorderBrush = new SolidColorBrush(Color.Parse("#23252A")),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(999),
+                Padding = new Thickness(11, 5),
+                FontSize = 10.5,
+                FontWeight = FontWeight.SemiBold,
+            };
+
+            if (camera.AtemInput is { } input)
+            {
+                chip.Click += (_, _) => _atem?.SetPreview(input);
+            }
+
+            _cameraChips.Add((camera.AtemInput, camera.Name, chip));
+            CameraChips.Children.Add(chip);
+        }
+    }
+
+    private void UpdateCameraChips()
+    {
+        foreach (var (input, name, chip) in _cameraChips)
+        {
+            var onNext = input == _nextInput;
+            chip.Content = onNext ? $"{name} · ON NEXT" : name;
+            chip.Background = onNext ? TallyPreview : SourceIdle;
+            chip.Foreground = onNext ? ChipInk : Ink;
+        }
+    }
+
     private void BuildKeyRow()
     {
         KeyRow.Children.Clear();
@@ -141,10 +187,10 @@ public partial class MainWindow : Window
             {
                 Content = key.Label,
                 Tag = key,
-                Margin = new Thickness(6, 0, 0, 0),
-                Height = 56,
-                MinWidth = 110,
-                FontSize = 12,
+                Margin = new Thickness(3),
+                Height = 40,
+                MinWidth = 0,
+                FontSize = 10.5,
                 FontWeight = FontWeight.Bold,
                 Foreground = Ink,
                 Background = SourceIdle,
@@ -246,11 +292,10 @@ public partial class MainWindow : Window
     private void UpdateCameraPanel()
     {
         var camera = _config.Config.CameraForInput(_nextInput);
-        var state = _atem?.State;
 
-        CameraNextName.Text = camera is null
-            ? $"{state?.Name(_nextInput) ?? "—"} · no camera"
-            : $"{camera.Name} · {state?.Name(_nextInput) ?? "—"}";
+        CameraNextName.Text = camera?.Name ?? _atem?.State.Name(_nextInput) ?? "—";
+
+        UpdateCameraChips();
 
         foreach (var (number, button) in _presetButtons)
         {
@@ -391,7 +436,6 @@ public partial class MainWindow : Window
 
         UpdateKeyButtons(state);
     }
-
     private void UpdateTally(AtemState state)
     {
         foreach (var (input, button) in _sourceButtons)
