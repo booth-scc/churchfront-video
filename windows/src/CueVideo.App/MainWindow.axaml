@@ -17,7 +17,7 @@
                     <TextBlock Text="Churchfront" FontSize="20" FontWeight="Bold" Foreground="{StaticResource Ink}" VerticalAlignment="Center" />
                     <Border Background="{StaticResource Card}" CornerRadius="999" Padding="3" BorderBrush="{StaticResource Line}" BorderThickness="1">
                         <StackPanel Orientation="Horizontal" Spacing="2">
-                            <Button Background="{StaticResource ActivePill}" Foreground="#0A0A0C" CornerRadius="999"
+                            <Button x:Name="OperatorButton" Background="{StaticResource ActivePill}" Foreground="#0A0A0C" CornerRadius="999"
                                     Padding="14,5" FontSize="12" FontWeight="Bold" Content="Operator" />
                             <Button x:Name="EngineerButton" Background="Transparent" Foreground="{StaticResource InkDim}" CornerRadius="999"
                                     Padding="14,5" FontSize="12" Content="Engineer" />
@@ -33,7 +33,7 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" RowDefinitions="*,Auto,Auto" Margin="22,14,22,16">
+        <Grid x:Name="OperatorView" Grid.Row="1" RowDefinitions="*,Auto,Auto" Margin="22,14,22,16">
 
             <!-- Monitors -->
             <Grid Grid.Row="0" ColumnDefinitions="*,*" ColumnSpacing="16" MinHeight="300">
@@ -194,5 +194,7 @@
                 </Grid>
             </Grid>
         </Grid>
+
+        <ContentControl x:Name="EngineerHost" Grid.Row="1" IsVisible="False" />
     </Grid>
 </Window>

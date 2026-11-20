@@ -14,7 +14,7 @@ namespace CueVideo.App;
 /// Engineer screens: map NDI feeds to inputs, edit cameras and the switcher address,
 /// and check what the app can actually see on the network.
 /// </summary>
-public sealed class EngineerWindow : Window
+public sealed class EngineerView : UserControl
 {
     private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#F4F5F7"));
     private static readonly IBrush InkDim = new SolidColorBrush(Color.Parse("#9AA0AA"));
@@ -31,16 +31,10 @@ public sealed class EngineerWindow : Window
     private readonly StackPanel _cameraStatus = new() { Spacing = 4 };
     private readonly StackPanel _sourceList = new() { Spacing = 2 };
 
-    public EngineerWindow(ConfigStore config, Action onSaved)
+    public EngineerView(ConfigStore config, Action onSaved)
     {
         _config = config;
         _onSaved = onSaved;
-
-        Title = "Churchfront Video — Engineer";
-        Width = 980;
-        Height = 720;
-        Background = new SolidColorBrush(Color.Parse("#0A0A0C"));
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         try
         {
@@ -63,9 +57,10 @@ public sealed class EngineerWindow : Window
         tabs.Items.Add(new TabItem { Header = "Status", Content = BuildStatus() });
 
         Content = tabs;
-        Closed += (_, _) => _finder?.Dispose();
-        Opened += async (_, _) => await ScanAsync();
+        AttachedToVisualTree += async (_, _) => await ScanAsync();
     }
+
+    public void Dispose() => _finder?.Dispose();
 
     private Control BuildSetup()
     {
@@ -306,29 +301,42 @@ public sealed class EngineerWindow : Window
         }
 
         var found = await Task.Run(() => _finder.GetSources(TimeSpan.FromSeconds(2)));
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var source in found)
         {
-            // NDI often advertises the same sender twice (IPv4 and IPv6); keep one.
-            var duplicate = _sources.Any(existing =>
-                ShortName(existing).Equals(ShortName(source.Name), StringComparison.OrdinalIgnoreCase));
-
-            if (!duplicate) _sources.Add(source.Name);
+            // NDI can advertise the same sender more than once (IPv4 and IPv6).
+            var shortName = ShortName(source.Name).Trim();
+            if (!seen.Add(shortName)) continue;
+            _sources.Add(source.Name);
         }
 
         foreach (var picture in _config.Config.Pictures.Values)
         {
-            if (!string.IsNullOrWhiteSpace(picture) && !_sources.Contains(picture)) _sources.Add(picture);
+            if (!string.IsNullOrWhiteSpace(picture) && seen.Add(picture.Trim())) _sources.Add(picture);
         }
 
         _scanStatus.Text = $"{_sources.Count} source{(_sources.Count == 1 ? "" : "s")} found";
 
         foreach (var (key, combo) in _feedCombos)
         {
-            if (combo.SelectedItem is null && _config.Config.Pictures.TryGetValue(key, out var picture))
+            if (!_config.Config.Pictures.TryGetValue(key, out var picture) || string.IsNullOrWhiteSpace(picture))
             {
-                combo.SelectedItem = picture;
+                continue;
             }
+
+            var match = _sources.FirstOrDefault(s =>
+                s.Equals(picture, StringComparison.OrdinalIgnoreCase) ||
+                ShortName(s).Equals(picture, StringComparison.OrdinalIgnoreCase) ||
+                ShortName(s).Equals(ShortName(picture), StringComparison.OrdinalIgnoreCase));
+
+            if (match is null)
+            {
+                _sources.Add(picture);
+                match = picture;
+            }
+
+            combo.SelectedItem = match;
         }
 
         RefreshSourceList();

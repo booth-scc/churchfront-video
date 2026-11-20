@@ -35,7 +35,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<int, ViscaIpLink> _links = [];
 
     private AtemClient? _atem;
-    private EngineerWindow? _engineer;
+    private EngineerView? _engineerView;
     private NdiView? _liveView;
     private NdiView? _nextView;
     private string? _nextNdiName;
@@ -112,6 +112,9 @@ public partial class MainWindow : Window
 
         foreach (var link in _links.Values) link.Dispose();
         _links.Clear();
+
+        _engineerView?.Dispose();
+        _engineerView = null;
 
         _atem?.Dispose();
         _atem = null;
@@ -199,19 +202,32 @@ public partial class MainWindow : Window
         BlackButton.Click += (_, _) => _atem?.FadeToBlack(me);
         MoreButton.Click += (_, _) => OpenMore();
         EngineerButton.Click += (_, _) => OpenEngineer();
+        OperatorButton.Click += (_, _) => ShowOperator();
     }
 
     private void OpenEngineer()
     {
-        if (_engineer is { IsVisible: true })
-        {
-            _engineer.Activate();
-            return;
-        }
+        _engineerView ??= new EngineerView(_config, ReloadConfig);
+        EngineerHost.Content = _engineerView;
 
-        _engineer = new EngineerWindow(_config, ReloadConfig);
-        _engineer.Closed += (_, _) => _engineer = null;
-        _engineer.Show(this);
+        OperatorView.IsVisible = false;
+        EngineerHost.IsVisible = true;
+
+        OperatorButton.Background = Brushes.Transparent;
+        OperatorButton.Foreground = InkDim;
+        EngineerButton.Background = new SolidColorBrush(Color.Parse("#DDE7F2"));
+        EngineerButton.Foreground = new SolidColorBrush(Color.Parse("#0A0A0C"));
+    }
+
+    private void ShowOperator()
+    {
+        OperatorView.IsVisible = true;
+        EngineerHost.IsVisible = false;
+
+        OperatorButton.Background = new SolidColorBrush(Color.Parse("#DDE7F2"));
+        OperatorButton.Foreground = new SolidColorBrush(Color.Parse("#0A0A0C"));
+        EngineerButton.Background = Brushes.Transparent;
+        EngineerButton.Foreground = InkDim;
     }
 
     private void ReloadConfig()

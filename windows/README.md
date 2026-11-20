@@ -1,14 +1,14 @@
-# Churchfront Video - Windows port
+﻿# Churchfront Video - Windows port
 
 C#/.NET port of the macOS SwiftUI app in `../Sources`, aimed at the booth's Windows 11 live-stream PC. The Swift sources stay untouched so upstream merges remain cheap; everything Windows lives under `windows/`.
 
 ## Status
 
-Phase 0/1 in progress. ATEM control and NDI send/receive work end to end, VISCA over IP (UDP 52381) is implemented with a fake-camera test suite, and the operator screen mirrors the macOS layout: NEXT and LIVE on top, a centred strip of live source thumbnails, and one bottom bar with the camera chip, exposure, per-camera shots, framing pad, and FADE / CUT / BLACK / LOWER THIRDS. An Engineer window maps NDI feeds to inputs, edits cameras and tests VISCA replies. Settings persistence and the tracker are still to come.
+Phase 0/1 in progress. ATEM control and NDI send/receive work end to end, VISCA over IP (UDP 52381) is implemented with a fake-camera test suite, and the operator screen mirrors the macOS layout: NEXT and LIVE on top, a centred strip of live source thumbnails, and one bottom bar with the camera chip, exposure, per-camera shots, framing pad, and FADE / CUT / BLACK / LOWER THIRDS. An Engineer view (same window, toggled from the header) maps NDI feeds to inputs, edits cameras and tests VISCA replies. Settings persistence and the tracker are still to come.
 
-## Engineer window
+## Engineer view
 
-Open it from the Engineer tab, or launch with `--engineer`. Two pages:
+Toggle it in the header, or launch with `--engineer`. Two pages:
 
 - **Setup** - scan NDI, assign a feed to each input (saved to `pictures`), edit camera name/address/port/input/first preset, test a camera's VISCA reply, change the switcher address.
 - **Status** - what the app can see: NDI sources found, camera reply test for all cameras, switcher address.
@@ -64,7 +64,7 @@ $env:CUEVIDEO_ATEM = "127.0.0.1"
 dotnet run --project windows\src\CueVideo.App
 ```
 
-The six fake feeds are named `CueVideo CAM1` … `CueVideo CAM6`; map them to inputs in `pictures` in the config. `CUEVIDEO_NDI_NEXT` / `CUEVIDEO_NDI_LIVE` still override a tile with one fixed source when needed.
+The six fake feeds are named `CueVideo CAM1` â€¦ `CueVideo CAM6`; map them to inputs in `pictures` in the config. `CUEVIDEO_NDI_NEXT` / `CUEVIDEO_NDI_LIVE` still override a tile with one fixed source when needed.
 
 `dotnet run --project windows\src\CueVideo.Spike -- atem 192.168.10.159 8` prints the real handshake, program/preview and link transitions without opening the UI. `dotnet run --project windows\src\CueVideo.Spike -- ndi 4` lists the NDI sources currently on the network.
 
@@ -102,3 +102,4 @@ Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; th
 2. G2 - ATEM tally mirrors Companion within 200 ms
 3. G3 - VISCA position/zoom/focus inquiries answered on 52381
 4. G4 - OBS program arrives over NDI while streaming
+
