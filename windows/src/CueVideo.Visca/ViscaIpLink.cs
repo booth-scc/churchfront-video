@@ -18,6 +18,7 @@ public sealed class ViscaIpLink : IDisposable
 
     private enum InquiryKind
     {
+        Power,
         PanTilt,
         Zoom,
         AeMode,
@@ -127,7 +128,7 @@ public sealed class ViscaIpLink : IDisposable
 
         // Reset the camera's sequence handling, then ask it something so silence is visible.
         Send(ViscaCommands.SequenceReset());
-        Send(ViscaCommands.PowerInquiry(), inquiry: true);
+        lock (_gate) Ask(InquiryKind.Power, ViscaCommands.PowerInquiry());
     }
 
     private void Loop()

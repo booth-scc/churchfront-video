@@ -15,18 +15,23 @@ namespace CueVideo.App;
 
 public partial class MainWindow : Window
 {
+    private sealed record SourceTile(int Input, Border Border, Border Badge, TextBlock BadgeText);
+
     private static readonly IBrush OnlineBrush = new SolidColorBrush(Color.Parse("#6FCF7A"));
     private static readonly IBrush ConnectingBrush = new SolidColorBrush(Color.Parse("#F2C14E"));
     private static readonly IBrush OfflineBrush = new SolidColorBrush(Color.Parse("#E0453A"));
 
-    private static readonly IBrush SourceIdle = new SolidColorBrush(Color.Parse("#1A1C20"));
-    private static readonly IBrush TallyProgram = new SolidColorBrush(Color.Parse("#E0453A"));
-    private static readonly IBrush TallyPreview = new SolidColorBrush(Color.Parse("#6FCF7A"));
+    private static readonly IBrush TileIdleBorder = Brushes.Transparent;
+    private static readonly IBrush TileProgram = new SolidColorBrush(Color.Parse("#E0453A"));
+    private static readonly IBrush TilePreview = new SolidColorBrush(Color.Parse("#6FCF7A"));
     private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#F4F5F7"));
     private static readonly IBrush InkDim = new SolidColorBrush(Color.Parse("#9AA0AA"));
+    private static readonly IBrush CardRaised = new SolidColorBrush(Color.Parse("#1A1C20"));
+    private static readonly IBrush LineBrush = new SolidColorBrush(Color.Parse("#23252A"));
 
     private readonly ConfigStore _config = new();
-    private readonly Dictionary<int, Button> _sourceButtons = [];
+    private readonly List<SourceTile> _tiles = [];
+    private readonly List<NdiView> _thumbs = [];
     private readonly Dictionary<int, ViscaIpLink> _links = [];
 
     private AtemClient? _atem;
@@ -35,6 +40,7 @@ public partial class MainWindow : Window
     private string? _nextNdiName;
     private int _nextInput = 1;
     private bool _initialised;
+    private double _speed = 1.0;
 
     public MainWindow()
     {
@@ -50,9 +56,10 @@ public partial class MainWindow : Window
         var host = Environment.GetEnvironmentVariable("CUEVIDEO_ATEM");
         if (string.IsNullOrWhiteSpace(host)) host = _config.Config.AtemHost;
 
-        BuildSourceRow();
+        BuildSourceTiles();
         WireTransport();
         WireCameraPanel();
+        WireSpeed();
 
         _atem = new AtemClient();
         _atem.LinkChanged += link => Dispatcher.UIThread.Post(() => ShowLink(link));
@@ -71,6 +78,9 @@ public partial class MainWindow : Window
         _liveView = null;
         _nextView = null;
 
+        foreach (var thumb in _thumbs) thumb.Dispose();
+        _thumbs.Clear();
+
         foreach (var link in _links.Values) link.Dispose();
         _links.Clear();
 
@@ -80,10 +90,10 @@ public partial class MainWindow : Window
 
     // ---- Switcher ----
 
-    private void BuildSourceRow()
+    private void BuildSourceTiles()
     {
-        SourceRow.Children.Clear();
-        _sourceButtons.Clear();
+        SourceTiles.Children.Clear();
+        _tiles.Clear();
 
         var sources = _config.Config.Sources.Count > 0
             ? _config.Config.Sources
@@ -94,29 +104,61 @@ public partial class MainWindow : Window
 
         foreach (var source in sources)
         {
-            var button = new Button
+            var name = string.IsNullOrWhiteSpace(source.Label) ? source.Input.ToString() : source.Label;
+
+            var host = new Border { Background = new SolidColorBrush(Color.Parse("#0D0E11")), CornerRadius = new CornerRadius(5) };
+
+            var ndi = _config.Config.Pictures.TryGetValue(source.Input.ToString(), out var picture) ? picture : source.Ndi;
+            if (!string.IsNullOrWhiteSpace(ndi))
             {
-                Content = string.IsNullOrWhiteSpace(source.Label) ? source.Input.ToString() : source.Label,
-                Tag = source.Input,
-                Margin = new Thickness(0, 0, 7, 0),
-                Foreground = Ink,
-                Background = SourceIdle,
-                BorderBrush = new SolidColorBrush(Color.Parse("#23252A")),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(10, 10),
-                FontSize = 13,
-                FontWeight = FontWeight.SemiBold,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                HorizontalContentAlignment = HorizontalAlignment.Center,
+                var thumb = new NdiView(ndi, "", lowestBandwidth: true);
+                _thumbs.Add(thumb);
+                host.Child = thumb;
+            }
+
+            var nameChip = new Border
+            {
+                Background = new SolidColorBrush(Color.Parse("#C8000000")),
+                CornerRadius = new CornerRadius(3),
+                Padding = new Thickness(6, 2),
+                Margin = new Thickness(7),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Child = new TextBlock { Text = name, FontSize = 10, Foreground = Ink },
+            };
+
+            var badgeText = new TextBlock { FontSize = 8, FontWeight = FontWeight.Bold, Foreground = Brushes.White };
+            var badge = new Border
+            {
+                Background = TilePreview,
+                CornerRadius = new CornerRadius(3),
+                Padding = new Thickness(5, 1),
+                Margin = new Thickness(7),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                IsVisible = false,
+                Child = badgeText,
+            };
+
+            var tile = new Border
+            {
+                Width = 142,
+                Height = 82,
+                CornerRadius = new CornerRadius(6),
+                BorderThickness = new Thickness(2),
+                BorderBrush = TileIdleBorder,
+                ClipToBounds = true,
+                Child = new Grid { Children = { host, nameChip, badge } },
             };
 
             var input = source.Input;
-            button.Click += (_, _) => _atem?.SetPreview(input);
+            tile.PointerPressed += (_, _) => _atem?.SetPreview(input);
 
-            _sourceButtons[input] = button;
-            SourceRow.Children.Add(button);
+            _tiles.Add(new SourceTile(input, tile, badge, badgeText));
+            SourceTiles.Children.Add(tile);
         }
+
+        foreach (var thumb in _thumbs) thumb.Start();
     }
 
     private void WireTransport()
@@ -126,25 +168,55 @@ public partial class MainWindow : Window
         CutButton.Click += (_, _) => _atem?.Cut(me);
         AutoButton.Click += (_, _) => _atem?.Auto(me);
         BlackButton.Click += (_, _) => _atem?.FadeToBlack(me);
+        MoreButton.Click += (_, _) => OpenMore();
+    }
+
+    private void WireSpeed()
+    {
+        SpeedSlider.ValueChanged += (_, args) =>
+        {
+            _speed = args.NewValue;
+            SpeedText.Text = $"{_speed:0.0}×";
+        };
+
+        ResetSpeedButton.Click += (_, _) =>
+        {
+            SpeedSlider.Value = 1.0;
+            _speed = 1.0;
+            SpeedText.Text = "1.0×";
+        };
     }
 
     // ---- Camera ----
 
     private void WireCameraPanel()
     {
-        Hold(PanUpLeft, () => Link()?.Drive(-1, 1), () => Link()?.StopMove());
-        Hold(PanUp, () => Link()?.Drive(0, 1), () => Link()?.StopMove());
-        Hold(PanUpRight, () => Link()?.Drive(1, 1), () => Link()?.StopMove());
-        Hold(PanLeft, () => Link()?.Drive(-1, 0), () => Link()?.StopMove());
-        Hold(PanRight, () => Link()?.Drive(1, 0), () => Link()?.StopMove());
-        Hold(PanDownLeft, () => Link()?.Drive(-1, -1), () => Link()?.StopMove());
-        Hold(PanDown, () => Link()?.Drive(0, -1), () => Link()?.StopMove());
-        Hold(PanDownRight, () => Link()?.Drive(1, -1), () => Link()?.StopMove());
+        Hold(PanUpLeft, () => Drive(-1, 1), () => Link()?.StopMove());
+        Hold(PanUp, () => Drive(0, 1), () => Link()?.StopMove());
+        Hold(PanUpRight, () => Drive(1, 1), () => Link()?.StopMove());
+        Hold(PanLeft, () => Drive(-1, 0), () => Link()?.StopMove());
+        Hold(PanRight, () => Drive(1, 0), () => Link()?.StopMove());
+        Hold(PanDownLeft, () => Drive(-1, -1), () => Link()?.StopMove());
+        Hold(PanDown, () => Drive(0, -1), () => Link()?.StopMove());
+        Hold(PanDownRight, () => Drive(1, -1), () => Link()?.StopMove());
 
-        ZoomInButton.Click += (_, _) => Link()?.Zoom(0.6);
-        ZoomOutButton.Click += (_, _) => Link()?.Zoom(-0.6);
-        HomeButton.Click += (_, _) => Link()?.Home();
-        MoreButton.Click += (_, _) => OpenMore();
+        ZoomInButton.Click += (_, _) => Link()?.Zoom(Math.Clamp(0.6 * _speed, 0, 1));
+        ZoomOutButton.Click += (_, _) => Link()?.Zoom(-Math.Clamp(0.6 * _speed, 0, 1));
+        FocusButton.Click += (_, _) => Link()?.AutoFocus(true);
+
+        ExposureAutoButton.Click += async (_, _) =>
+        {
+            if (Link() is { } link)
+            {
+                await link.AutoExposureAsync();
+                await ShowExposureAsync();
+            }
+        };
+    }
+
+    private void Drive(double pan, double tilt)
+    {
+        Link()?.Drive(Math.Clamp(pan * _speed, -1, 1), Math.Clamp(tilt * _speed, -1, 1));
     }
 
     private static void Hold(Button button, Action start, Action stop)
@@ -171,47 +243,85 @@ public partial class MainWindow : Window
 
     private void BuildShots()
     {
-        ShotPanel.Children.Clear();
+        ShotRows.Children.Clear();
 
-        var camera = _config.Config.CameraForInput(_nextInput);
-        if (camera is null) return;
-
-        foreach (var preset in new[] { 8, 9 })
+        foreach (var camera in _config.Config.Cameras)
         {
-            var label = preset == 8
-                ? (camera.PresetName(8) == "8" ? "Full Stage" : camera.PresetName(8))
-                : (camera.PresetName(9) == "9" ? "Sermon" : camera.PresetName(9));
+            if (camera.AtemInput is not { } input) continue;
 
-            var button = new Button
+            var row = new Grid
             {
-                Content = label,
-                Height = 46,
-                FontSize = 12,
-                Classes = { "shot" },
+                ColumnDefinitions = new ColumnDefinitions("62,*,*"),
+                ColumnSpacing = 5,
             };
 
-            var slot = preset;
-            button.Click += (_, _) => Link()?.Recall(slot);
-            ShotPanel.Children.Add(button);
+            var isNext = input == _nextInput;
+
+            var cameraButton = new Button
+            {
+                Content = camera.Name,
+                Height = 30,
+                FontSize = 9.5,
+                FontWeight = FontWeight.SemiBold,
+                Padding = new Thickness(6, 2),
+                Background = isNext ? new SolidColorBrush(Color.Parse("#13301A")) : CardRaised,
+                Foreground = isNext ? TilePreview : InkDim,
+                BorderBrush = isNext ? TilePreview : LineBrush,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+            };
+
+            cameraButton.Click += (_, _) => _atem?.SetPreview(input);
+
+            row.Children.Add(cameraButton);
+
+            var column = 1;
+            foreach (var preset in new[] { 8, 9 })
+            {
+                var label = camera.PresetName(preset);
+                if (label == preset.ToString()) label = preset == 8 ? "Full Stage" : "Sermon";
+
+                var shot = new Button
+                {
+                    Content = label,
+                    Height = 30,
+                    FontSize = 9.5,
+                    Padding = new Thickness(6, 2),
+                    Classes = { "ghost" },
+                };
+
+                var slot = preset;
+                var cameraInput = input;
+                shot.Click += (_, _) => LinkFor(cameraInput)?.Recall(slot);
+
+                Grid.SetColumn(shot, column++);
+                row.Children.Add(shot);
+            }
+
+            ShotRows.Children.Add(row);
         }
     }
 
-    private async Task ShowExposureAsync(TextBlock gain, TextBlock shutter, TextBlock iris, TextBlock white)
+    private async Task ShowExposureAsync()
     {
+        var camera = _config.Config.CameraForInput(_nextInput);
+        ExposureCamText.Text = camera is null ? "No camera on Next" : $"{camera.Name} exposure";
+
         var link = Link();
         if (link is null)
         {
-            gain.Text = shutter.Text = iris.Text = white.Text = "—";
+            ExposureGain.Text = ExposureShutter.Text = ExposureIris.Text = ExposureWhite.Text = "—";
             return;
         }
 
         var exposure = await link.ReadExposureAsync(TimeSpan.FromMilliseconds(1500));
         if (exposure is null) return;
 
-        gain.Text = exposure.Gain is { } value ? $"{value} dB" : "Auto";
-        shutter.Text = exposure.Shutter is { } s ? $"1/{s:0}" : "Auto";
-        iris.Text = exposure.Iris is { } i ? $"f/{i / 100.0:0.#}" : "Auto";
-        white.Text = exposure.WhiteBalance switch
+        ExposureGain.Text = exposure.Gain is { } gain ? $"{gain} dB" : "Auto";
+        ExposureShutter.Text = exposure.Shutter is { } shutter ? $"1/{shutter:0}" : "Auto";
+        ExposureIris.Text = exposure.Iris is { } iris ? $"f/{iris / 100.0:0.#}" : "Auto";
+        ExposureWhite.Text = exposure.WhiteBalance switch
         {
             "auto" => "Auto",
             "kelvin" => exposure.Kelvin is { } kelvin ? $"{kelvin} K" : "Kelvin",
@@ -287,36 +397,51 @@ public partial class MainWindow : Window
         _nextInput = preview;
 
         UpdateTally(state);
+        UpdateSwitcherLabels(state);
 
-        if (changed)
-        {
-            var camera = _config.Config.CameraForInput(_nextInput);
-            CameraNextName.Text = camera?.Name ?? state.Name(_nextInput);
+        if (!changed) return;
 
-            BuildShots();
-            UpdateNextTile();
-        }
+        var camera = _config.Config.CameraForInput(_nextInput);
+        CameraChipName.Text = camera?.Name ?? state.Name(_nextInput);
+
+        BuildShots();
+        UpdateNextTile();
+        _ = ShowExposureAsync();
     }
 
     private void UpdateTally(AtemState state)
     {
-        foreach (var (input, button) in _sourceButtons)
+        foreach (var tile in _tiles)
         {
             byte bits;
-            if (state.Tally.TryGetValue(input, out var bit))
+            if (state.Tally.TryGetValue(tile.Input, out var bit))
             {
                 bits = bit;
             }
             else
             {
-                bits = (byte)((state.Program.Values.Contains(input) ? 1 : 0) | (state.Preview.Values.Contains(input) ? 2 : 0));
+                bits = (byte)((state.Program.Values.Contains(tile.Input) ? 1 : 0) | (state.Preview.Values.Contains(tile.Input) ? 2 : 0));
             }
 
-            button.Background = (bits & 1) != 0 ? TallyProgram
-                : (bits & 2) != 0 ? TallyPreview
-                : SourceIdle;
-            button.Foreground = bits != 0 ? Brushes.White : Ink;
+            var isProgram = (bits & 1) != 0;
+            var isPreview = (bits & 2) != 0;
+
+            tile.Border.BorderBrush = isProgram ? TileProgram : isPreview ? TilePreview : TileIdleBorder;
+            tile.Badge.IsVisible = isProgram || isPreview;
+            tile.Badge.Background = isProgram ? TileProgram : TilePreview;
+            tile.BadgeText.Text = isProgram ? "LIVE" : "NEXT";
         }
+    }
+
+    private void UpdateSwitcherLabels(AtemState state)
+    {
+        var inTransition = state.InTransition.GetValueOrDefault(0);
+        var frames = state.MixRate.GetValueOrDefault(0);
+        var seconds = frames > 0 ? frames / 30.0 : 1.0;
+
+        FadeSub.Text = $"{seconds:0.0} s · Return";
+        BlackSub.Text = state.FtbBlack.GetValueOrDefault(0) ? "On" : "Off";
+        AutoButton.Opacity = inTransition ? 0.75 : 1.0;
     }
 
     // ---- More ----
@@ -326,46 +451,16 @@ public partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "More controls",
-            Width = 460,
-            Height = 600,
+            Width = 440,
+            Height = 560,
             CanResize = false,
             Background = new SolidColorBrush(Color.Parse("#0A0A0C")),
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
         };
 
-        var panel = new StackPanel { Spacing = 12, Margin = new Thickness(22) };
-        panel.Children.Add(Heading("EXPOSURE"));
-
-        var exposure = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("80,*"),
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
-            RowSpacing = 4,
-        };
-
-        var gain = ValueText();
-        var shutter = ValueText();
-        var iris = ValueText();
-        var white = ValueText();
-
-        AddRow(exposure, 0, "Gain", gain);
-        AddRow(exposure, 1, "Shutter", shutter);
-        AddRow(exposure, 2, "Iris", iris);
-        AddRow(exposure, 3, "White", white);
-        panel.Children.Add(exposure);
-
-        var autoExposure = Ghost("Auto exposure");
-        autoExposure.Click += async (_, _) =>
-        {
-            if (Link() is { } link)
-            {
-                await link.AutoExposureAsync();
-                await ShowExposureAsync(gain, shutter, iris, white);
-            }
-        };
-        panel.Children.Add(autoExposure);
-
+        var panel = new StackPanel { Spacing = 10, Margin = new Thickness(22) };
         panel.Children.Add(Heading("FOCUS"));
+
         var focusRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         var near = Ghost("Near");
         var auto = Ghost("Auto");
@@ -385,7 +480,7 @@ public partial class MainWindow : Window
             var button = new Button
             {
                 Content = key.Label,
-                Height = 42,
+                Height = 40,
                 Margin = new Thickness(0, 0, 6, 6),
                 Classes = { "ghost" },
                 FontSize = 11,
@@ -404,7 +499,7 @@ public partial class MainWindow : Window
             var button = new Button
             {
                 Content = number.ToString(),
-                Height = 40,
+                Height = 38,
                 Margin = new Thickness(0, 0, 6, 6),
                 Classes = { "ghost" },
                 FontSize = 11,
@@ -416,10 +511,20 @@ public partial class MainWindow : Window
         }
         panel.Children.Add(presets);
 
+        panel.Children.Add(Heading("EXPOSURE"));
+        var exposureAuto = Ghost("Auto exposure");
+        exposureAuto.Click += async (_, _) =>
+        {
+            if (Link() is { } link)
+            {
+                await link.AutoExposureAsync();
+                await ShowExposureAsync();
+            }
+        };
+        panel.Children.Add(exposureAuto);
+
         dialog.Content = new ScrollViewer { Content = panel };
         dialog.ShowDialog(this);
-
-        _ = ShowExposureAsync(gain, shutter, iris, white);
     }
 
     private void ToggleKey(KeyButtonConfig key)
@@ -448,30 +553,6 @@ public partial class MainWindow : Window
         Foreground = new SolidColorBrush(Color.Parse("#767C87")),
         Margin = new Thickness(0, 6, 0, 0),
     };
-
-    private static TextBlock ValueText() => new()
-    {
-        Text = "—",
-        FontSize = 11,
-        Foreground = new SolidColorBrush(Color.Parse("#9AA0AA")),
-    };
-
-    private static void AddRow(Grid grid, int row, string label, TextBlock value)
-    {
-        var name = new TextBlock
-        {
-            Text = label,
-            FontSize = 11,
-            Foreground = new SolidColorBrush(Color.Parse("#767C87")),
-        };
-
-        Grid.SetRow(name, row);
-        Grid.SetColumn(name, 0);
-        Grid.SetRow(value, row);
-        Grid.SetColumn(value, 1);
-        grid.Children.Add(name);
-        grid.Children.Add(value);
-    }
 
     private static Button Ghost(string text) => new()
     {

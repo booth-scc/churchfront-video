@@ -36,7 +36,9 @@ internal static class Program
                     ? NdiProbe(args.Skip(1).ToArray())
                     : args.Length > 0 && args[0].Equals("fake-ndi", StringComparison.OrdinalIgnoreCase)
                         ? NdiTestPattern.Run(args.Skip(1).ToArray())
-                        : Doctor();
+                        : args.Length > 0 && args[0].Equals("fake-visca", StringComparison.OrdinalIgnoreCase)
+                            ? FakeVisca(args.Skip(1).ToArray())
+                            : Doctor();
     }
 
     private static int Doctor()
@@ -102,6 +104,13 @@ internal static class Program
     {
         var port = args.Length > 0 && int.TryParse(args[0], out var parsed) ? parsed : 9910;
         FakeSwitcher.Run(port);
+        return 0;
+    }
+
+    private static int FakeVisca(string[] args)
+    {
+        var port = args.Length > 0 && int.TryParse(args[0], out var parsed) ? parsed : 52381;
+        FakeCamera.Run(port);
         return 0;
     }
 
