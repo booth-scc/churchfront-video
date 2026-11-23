@@ -71,9 +71,7 @@ public sealed record BoothSnapshot(
     public string? CameraOnNextProblem => CameraOnNext switch
     {
         null => "No camera on Next.",
-        { IsSupported: false } camera => $"{camera.Name} · {camera.ProtocolLabel} unsupported by this port.",
-        { Host: var host } camera when string.IsNullOrWhiteSpace(host) => $"{camera.Name} has no address.",
-        _ => null,
+        var camera => camera.DriveProblem,
     };
 
     /// <summary>The subject of the exposure rows: which camera they describe.</summary>

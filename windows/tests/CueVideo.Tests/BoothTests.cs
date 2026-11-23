@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CueVideo.Atem;
 using CueVideo.Core;
 using CueVideo.Visca;
@@ -217,17 +218,142 @@ public sealed class BoothTests : IDisposable
         link.Store(20);
         booth.Cameras.LinkFor(1)!.Recall(9);
 
-        var deadline = DateTime.UtcNow.AddSeconds(2);
-        while (DateTime.UtcNow < deadline &&
-               !fake.Received.Any(p => p.SequenceEqual(ViscaCommands.PresetRecall(9, 20))))
-        {
-            await Task.Delay(25);
-        }
+        await WaitFor(fake, ViscaCommands.PresetRecall(9, 20));
 
         Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.Drive(1, 0)));
         Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.PresetRecall(8, 20)));
         Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.PresetStore(20, 20)));
         Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.PresetRecall(9, 20)));
+    }
+
+    [Fact]
+    public async Task ASavedShotSendsTheCameraToItsPlace()
+    {
+        using var fake = new FakeViscaCamera();
+        using var booth = NewBooth(out var switcher);
+        booth.Config.Cameras.Clear();
+        booth.Config.Cameras.Add(new PtzCameraConfig
+        {
+            Name = "Cam-1",
+            Host = "127.0.0.1",
+            Port = fake.Port,
+            AtemInput = 1,
+            Shots = [new PtzShot { Name = "Stage", Pan = 1200, Tilt = -300, Zoom = 4000 }],
+        });
+
+        var state = new AtemState();
+        state.Preview[0] = 1;
+        switcher.Push(state);
+
+        var button = Assert.Single(booth.Config.CameraForInput(1)!.ShotButtons);
+        await booth.RecallShotAsync(1, button);
+
+        await WaitFor(fake, ViscaCommands.AbsolutePanTilt(1200, -300));
+
+        Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.AbsolutePanTilt(1200, -300)));
+        Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.AbsoluteZoom(4000)));
+    }
+
+    [Fact]
+    public async Task AnExposureShotAppliesItsExposure()
+    {
+        using var fake = new FakeViscaCamera();
+        using var booth = NewBooth(out var switcher);
+        booth.Config.Cameras.Clear();
+        booth.Config.Cameras.Add(new PtzCameraConfig
+        {
+            Name = "Cam-1",
+            Host = "127.0.0.1",
+            Port = fake.Port,
+            AtemInput = 1,
+            Shots =
+            [
+                new PtzShot
+                {
+                    Name = "Dim",
+                    Kind = "exposure",
+                    Exposure = JsonDocument.Parse("""{ "gain": 6, "shutter": 60, "iris": 400 }""").RootElement.Clone(),
+                },
+            ],
+        });
+
+        var state = new AtemState();
+        state.Preview[0] = 1;
+        switcher.Push(state);
+
+        var button = Assert.Single(booth.Config.CameraForInput(1)!.ShotButtons);
+        await booth.RecallShotAsync(1, button);
+        await WaitFor(fake, ViscaCommands.SetGainLevel(6));
+
+        Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.SetManualExposure()));
+        Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.SetShutterPosition(2)));
+        Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.SetIrisPosition(7)));
+        Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.SetGainLevel(6)));
+    }
+
+    [Fact]
+    public async Task AShotWithAnExposureIsAnExposureEvenIfItHasCounts()
+    {
+        using var fake = new FakeViscaCamera();
+        using var booth = NewBooth(out var switcher);
+        booth.Config.Cameras.Clear();
+        booth.Config.Cameras.Add(new PtzCameraConfig
+        {
+            Name = "Cam-1",
+            Host = "127.0.0.1",
+            Port = fake.Port,
+            AtemInput = 1,
+            Shots =
+            [
+                new PtzShot
+                {
+                    Name = "Dim",
+                    Pan = 100,
+                    Tilt = 200,
+                    Zoom = 300,
+                    Exposure = JsonDocument.Parse("""{ "gain": 6 }""").RootElement.Clone(),
+                },
+            ],
+        });
+
+        var state = new AtemState();
+        state.Preview[0] = 1;
+        switcher.Push(state);
+
+        var button = Assert.Single(booth.Config.CameraForInput(1)!.ShotButtons);
+        await booth.RecallShotAsync(1, button);
+        await WaitFor(fake, ViscaCommands.SetGainLevel(6));
+
+        Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.SetGainLevel(6)));
+        Assert.DoesNotContain(fake.Received, p => p.SequenceEqual(ViscaCommands.AbsolutePanTilt(100, 200)));
+    }
+
+    [Fact]
+    public async Task AShotRowPresetFallsBackToTheCameraPreset()
+    {
+        using var fake = new FakeViscaCamera();
+        using var booth = NewBooth(out var switcher);
+        booth.Config.Cameras.Clear();
+        booth.Config.Cameras.Add(new PtzCameraConfig
+        {
+            Name = "Cam-1",
+            Host = "127.0.0.1",
+            Port = fake.Port,
+            AtemInput = 1,
+            FirstPreset = 20,
+            PresetNames = new Dictionary<string, string> { ["8"] = "Full Stage" },
+        });
+
+        var state = new AtemState();
+        state.Preview[0] = 1;
+        switcher.Push(state);
+
+        var button = Assert.Single(booth.Config.CameraForInput(1)!.ShotButtons);
+        await booth.RecallShotAsync(1, button);
+
+        await WaitFor(fake, ViscaCommands.PresetRecall(8, 20));
+
+        Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.PresetRecall(8, 20)));
     }
 
     [Fact]
@@ -342,6 +468,15 @@ public sealed class BoothTests : IDisposable
         switcher.SetLink(new AtemLink(AtemLinkState.Offline, "No answer from 192.168.10.159"));
 
         Assert.Equal("No answer from 192.168.10.159", booth.Render().Status.Text);
+    }
+
+    private static async Task WaitFor(FakeViscaCamera camera, byte[] command)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < deadline && !camera.Received.Any(p => p.SequenceEqual(command)))
+        {
+            await Task.Delay(25);
+        }
     }
 
     /// <summary>

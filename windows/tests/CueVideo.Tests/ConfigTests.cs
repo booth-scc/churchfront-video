@@ -30,7 +30,12 @@ public sealed class ConfigTests : IDisposable
               "atemInput": 1,
               "firstPreset": 20,
               "presetNames": { "8": "Full Stage", "9": "Sermon" },
-              "shots": [],
+              "presetOrder": [ 9, 8 ],
+              "shots": [
+                { "id": "11111111-1111-1111-1111-111111111111", "name": "Stage", "kind": "position", "pan": 1200, "tilt": -300, "zoom": 4000, "auto": true },
+                { "name": "Sermon", "pan": 800, "tilt": -100, "zoom": 2000 },
+                { "name": "Dim", "exposure": { "gain": 6, "kelvin": 4300, "macOnly": 1 } }
+              ],
               "macOnlyField": { "a": 1 }
             }
           ],
@@ -47,11 +52,25 @@ public sealed class ConfigTests : IDisposable
         Assert.False(store.UsedLastGood);
         Assert.Equal("192.168.10.159", store.Config.AtemHost);
         Assert.Equal(52381, store.Config.Cameras[0].EffectivePort);
-        Assert.Equal("Full Stage", store.Config.Cameras[0].PresetName(8));
+        Assert.Equal("Full Stage", store.Config.Cameras[0].PresetNames["8"]);
         Assert.Equal(1.4, store.Config.TrackSpeed, 3);
         Assert.True(store.Config.Sources[0].Extra!.ContainsKey("futureField"));
         Assert.True(store.Config.Cameras[0].Extra!.ContainsKey("macOnlyField"));
         Assert.True(store.Config.Extra!.ContainsKey("unknownRoot"));
+
+        // Saved shots are typed, and keys this port does not use are carried through.
+        var shots = store.Config.Cameras[0].Shots;
+        Assert.Equal(3, shots.Count);
+        Assert.Equal("Stage", shots[0].Name);
+        Assert.True(shots[0].IsPosition);
+        Assert.Equal(1200, shots[0].Pan);
+        Assert.True(shots[0].Extra!.ContainsKey("id"));
+        Assert.True(shots[0].Extra!.ContainsKey("auto"));
+        Assert.True(shots[1].IsPosition);                     // no kind, no exposure
+        Assert.True(shots[2].IsExposure);                     // no kind, but an exposure
+        Assert.Equal(JsonValueKind.Object, shots[2].Exposure!.Value.ValueKind);
+        Assert.Equal(1, shots[2].Exposure!.Value.GetProperty("macOnly").GetInt32());
+        Assert.Equal([9, 8], store.Config.Cameras[0].PresetOrder);
 
         // Unknown keys survive a save/load cycle, and computed values are not written.
         store.Save();
@@ -64,6 +83,9 @@ public sealed class ConfigTests : IDisposable
         Assert.True(again.Config.Extra!.ContainsKey("unknownRoot"));
         Assert.True(again.Config.Cameras[0].Extra!.ContainsKey("macOnlyField"));
         Assert.Equal(JsonValueKind.Object, again.Config.Cameras[0].Extra!["macOnlyField"].ValueKind);
+        Assert.Equal(3, again.Config.Cameras[0].Shots.Count);
+        Assert.True(again.Config.Cameras[0].Shots[0].Extra!.ContainsKey("auto"));
+        Assert.Equal(1, again.Config.Cameras[0].Shots[2].Exposure!.Value.GetProperty("macOnly").GetInt32());
     }
 
     [Fact]

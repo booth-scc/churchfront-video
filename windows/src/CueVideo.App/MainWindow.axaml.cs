@@ -314,9 +314,10 @@ public partial class MainWindow : Window
         {
             if (camera.AtemInput is not { } input) continue;
 
+            var buttons = camera.ShotButtons;
             var row = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("62,*,*"),
+                ColumnDefinitions = ShotColumns(buttons.Count),
                 ColumnSpacing = 5,
             };
 
@@ -338,32 +339,46 @@ public partial class MainWindow : Window
                 HorizontalContentAlignment = HorizontalAlignment.Center,
             };
 
-            if (!camera.IsSupported) ToolTip.SetTip(cameraButton, $"{camera.ProtocolLabel} unsupported by this port");
+            if (camera.DriveProblem is { } cameraProblem) ToolTip.SetTip(cameraButton, cameraProblem);
 
             cameraButton.Click += (_, _) => _booth.SetPreview(input);
 
             row.Children.Add(cameraButton);
 
-            var column = 1;
-            foreach (var preset in new[] { 8, 9 })
+            if (buttons.Count == 0)
             {
-                var label = camera.PresetName(preset);
-                if (label == preset.ToString()) label = preset == 8 ? "Full Stage" : "Sermon";
+                var none = new TextBlock
+                {
+                    Text = CameraShotRow.NoShots,
+                    FontSize = 9.5,
+                    Foreground = InkDim,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+
+                Grid.SetColumn(none, 1);
+                row.Children.Add(none);
+            }
+
+            // A shot needs a link this port can open; say why when it cannot.
+            var shotProblem = camera.DriveProblem;
+
+            var column = 1;
+            foreach (var shotButton in buttons)
+            {
+                var problem = shotProblem ?? shotButton.Problem;
 
                 var shot = new Button
                 {
-                    Content = label,
+                    Content = shotButton.Label,
                     Height = 30,
                     FontSize = 9.5,
                     Padding = new Thickness(6, 2),
                     Classes = { "ghost" },
-                    IsEnabled = camera.IsSupported,
+                    IsEnabled = problem is null,
                 };
 
-                var slot = preset;
-                var cameraInput = input;
-                shot.Click += (_, _) => _booth.Cameras.LinkFor(cameraInput)?.Recall(slot);
-                if (!camera.IsSupported) ToolTip.SetTip(shot, $"{camera.ProtocolLabel} unsupported by this port");
+                shot.Click += (_, _) => _ = _booth.RecallShotAsync(input, shotButton);
+                if (problem is not null) ToolTip.SetTip(shot, problem);
 
                 Grid.SetColumn(shot, column++);
                 row.Children.Add(shot);
@@ -372,6 +387,10 @@ public partial class MainWindow : Window
             ShotRows.Children.Add(row);
         }
     }
+
+    /// <summary>A camera column, then one column per shot button, or one for the empty state.</summary>
+    private static ColumnDefinitions ShotColumns(int buttons) =>
+        new(buttons == 0 ? "62,*" : "62" + string.Concat(Enumerable.Repeat(",*", buttons)));
 
     // ---- Pictures ----
 
@@ -459,6 +478,7 @@ public partial class MainWindow : Window
 
         if (!previewChanged) return;
 
+        // The shot rows mark the camera on Next, so a preview change is what rebuilds them.
         BuildShots(state.CameraOnNext);
         UpdateNextTile(state.PreviewInput);
         _ = _booth.RefreshExposureAsync();

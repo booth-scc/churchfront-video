@@ -29,10 +29,10 @@ $config = @'
     { "input": 6, "label": "PRES STAGE" }
   ],
   "cameras": [
-    { "name": "Cam-1",  "host": "127.0.0.1", "port": 52381, "atemInput": 1, "firstPreset": 20 },
-    { "name": "Cam-2S", "host": "127.0.0.1", "port": 52382, "atemInput": 2, "firstPreset": 20 },
-    { "name": "Cam-3",  "host": "127.0.0.1", "port": 52383, "atemInput": 3, "firstPreset": 20 },
-    { "name": "Cam-4",  "host": "127.0.0.1", "port": 52384, "atemInput": 4, "firstPreset": 20 }
+    { "name": "Cam-1",  "host": "127.0.0.1", "port": 52381, "atemInput": 1, "firstPreset": 20, "presetNames": { "8": "Full Stage", "9": "Sermon" } },
+    { "name": "Cam-2S", "host": "127.0.0.1", "port": 52382, "atemInput": 2, "firstPreset": 20, "presetNames": { "8": "Full Stage", "9": "Sermon" } },
+    { "name": "Cam-3",  "host": "127.0.0.1", "port": 52383, "atemInput": 3, "firstPreset": 20, "presetNames": { "8": "Full Stage", "9": "Sermon" } },
+    { "name": "Cam-4",  "host": "127.0.0.1", "port": 52384, "atemInput": 4, "firstPreset": 20, "presetNames": { "8": "Full Stage", "9": "Sermon" } }
   ],
   "pictures": { "1": "CueVideo CAM1", "2": "CueVideo CAM2", "3": "CueVideo CAM3", "4": "CueVideo CAM4", "5": "CueVideo CAM5", "6": "CueVideo CAM6" },
   "keys": [

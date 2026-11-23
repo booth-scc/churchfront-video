@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CueVideo.Visca;
 
 namespace CueVideo.Core;
 
@@ -75,10 +76,10 @@ public sealed class CueConfig
         ],
         Cameras =
         [
-            new PtzCameraConfig { Name = "Cam-1", Host = "192.168.10.183", AtemInput = 1, FirstPreset = 20 },
-            new PtzCameraConfig { Name = "Cam-2S", Host = "192.168.10.137", AtemInput = 2, FirstPreset = 20 },
-            new PtzCameraConfig { Name = "Cam-3", Host = "192.168.10.149", AtemInput = 3, FirstPreset = 20 },
-            new PtzCameraConfig { Name = "Cam-4", Host = "192.168.10.136", AtemInput = 4, FirstPreset = 20 },
+            DefaultCamera("Cam-1", "192.168.10.183", 1),
+            DefaultCamera("Cam-2S", "192.168.10.137", 2),
+            DefaultCamera("Cam-3", "192.168.10.149", 3),
+            DefaultCamera("Cam-4", "192.168.10.136", 4),
         ],
         Keys =
         [
@@ -87,6 +88,19 @@ public sealed class CueConfig
             new KeyButtonConfig { Label = "KEY 3", Me = 1, Keyer = 3 },
             new KeyButtonConfig { Label = "KEY 4", Me = 1, Keyer = 4 },
         ],
+    };
+
+    private static PtzCameraConfig DefaultCamera(string name, string host, int input) => new()
+    {
+        Name = name,
+        Host = host,
+        AtemInput = input,
+        FirstPreset = 20,
+        PresetNames = new Dictionary<string, string>
+        {
+            ["8"] = "Full Stage",
+            ["9"] = "Sermon",
+        },
     };
 
     public PtzCameraConfig? CameraForInput(int input) =>
@@ -140,8 +154,13 @@ public sealed class PtzCameraConfig
     [JsonPropertyName("presetNames")]
     public Dictionary<string, string> PresetNames { get; set; } = new();
 
+    /// <summary>The order the camera's own presets are shown in, by preset number.</summary>
+    [JsonPropertyName("presetOrder")]
+    public List<int> PresetOrder { get; set; } = [];
+
+    /// <summary>Shots saved in CueVideo's config file, in button order.</summary>
     [JsonPropertyName("shots")]
-    public List<JsonElement> Shots { get; set; } = [];
+    public List<PtzShot> Shots { get; set; } = [];
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extra { get; set; }
@@ -155,8 +174,106 @@ public sealed class PtzCameraConfig
     [JsonIgnore]
     public int EffectivePort => Port ?? CameraProtocols.DefaultPort(Proto);
 
-    public string PresetName(int number) =>
-        PresetNames.TryGetValue(number.ToString(), out var name) && name.Length > 0 ? name : number.ToString();
+    /// <summary>Why this camera cannot be driven; null when it can. Names the camera and the gap.</summary>
+    [JsonIgnore]
+    public string? DriveProblem =>
+        !IsSupported ? $"{Name} · {ProtocolLabel} unsupported by this port."
+        : string.IsNullOrWhiteSpace(Host) ? $"{Name} has no address."
+        : null;
+
+    /// <summary>The buttons in this camera's shot row, from the setup file.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<ShotButton> ShotButtons => CameraShotRow.For(this);
+}
+
+/// <summary>
+/// A named shot saved in CueVideo's config file, so it can be made and edited by hand. A
+/// position shot holds pan, tilt and zoom in the camera's own counts; an exposure shot holds
+/// an exposure object instead.
+/// </summary>
+public sealed class PtzShot
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "Shot";
+
+    /// <summary>"position" or "exposure"; omitted when the shot says it another way.</summary>
+    [JsonPropertyName("kind")]
+    public string? Kind { get; set; }
+
+    [JsonPropertyName("pan")]
+    public int? Pan { get; set; }
+
+    [JsonPropertyName("tilt")]
+    public int? Tilt { get; set; }
+
+    [JsonPropertyName("zoom")]
+    public int? Zoom { get; set; }
+
+    /// <summary>The Mac's exposure object, kept whole until the exposure panel needs it.</summary>
+    [JsonPropertyName("exposure")]
+    public JsonElement? Exposure { get; set; }
+
+    /// <summary>Keys this port does not know yet, such as "id" and "auto"; carried through unchanged.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
+
+    [JsonIgnore]
+    public string DisplayName => string.IsNullOrWhiteSpace(Name) ? "Shot" : Name;
+
+    [JsonIgnore]
+    public bool IsExposure =>
+        Kind is { Length: > 0 } kind ? string.Equals(kind, "exposure", StringComparison.OrdinalIgnoreCase) : Exposure is not null;
+
+    /// <summary>The place this shot sends the camera to; null unless all three counts are set.</summary>
+    [JsonIgnore]
+    public PtzPosition? Position => Pan is { } pan && Tilt is { } tilt && Zoom is { } zoom
+        ? new PtzPosition(pan, tilt, zoom)
+        : null;
+
+    [JsonIgnore]
+    public bool IsPosition => !IsExposure && Position is not null;
+
+    /// <summary>The exposure a shot sets, read from the Mac object when it is recalled.</summary>
+    [JsonIgnore]
+    public ExposureRequest? ExposureValues
+    {
+        get
+        {
+            if (!IsExposure || Exposure is not { } exposure || exposure.ValueKind != JsonValueKind.Object) return null;
+
+            int? Int(string key) =>
+                exposure.TryGetProperty(key, out var value) && value.TryGetInt32(out var number) ? number : null;
+
+            string? Text(string key) =>
+                exposure.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String
+                    ? value.GetString()
+                    : null;
+
+            var request = new ExposureRequest
+            {
+                Gain = Int("gain"),
+                Shutter = Int("shutter"),
+                Iris = Int("iris"),
+                WhiteBalance = Text("wb"),
+                Kelvin = Int("kelvin"),
+            };
+
+            return request.HasExposure || request.WhiteBalance is not null || request.Kelvin is not null
+                ? request
+                : null;
+        }
+    }
+
+    /// <summary>What is missing before this shot can move or set the camera; null when it can.</summary>
+    [JsonIgnore]
+    public string? Problem
+    {
+        get
+        {
+            if (IsExposure) return ExposureValues is null ? $"{DisplayName} has no exposure." : null;
+            return Position is null ? $"{DisplayName} has no saved position." : null;
+        }
+    }
 }
 
 public sealed class KeyButtonConfig

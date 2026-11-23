@@ -250,7 +250,7 @@ All four steps above are complete except the fork remote.
 | Engineer | Engineer window: NDI feed mapping per input (saved to `pictures`), camera address/port/input/preset editing, per-camera VISCA test, switcher address, live NDI source count. Writes `config.json` and reloads the operator view without a restart |
 | Packaging | `windows\build.ps1` publishes self-contained win-x64 and compiles an Inno Setup installer (`dist\ChurchfrontVideo-Setup-0.1.0.exe`, ~55 MB) with NDI prerequisite check, optional autostart, Start-menu/desktop icons. Install test still to do on an elevated session or clean VM |
 | Config | `%APPDATA%\CueVideo\config.json` with the macOS schema, unknown keys preserved, last-good fallback, first-run booth defaults |
-| UI wiring | Replicates the macOS operator screen: NEXT/LIVE monitors, live source thumbnails with NEXT/LIVE badges, camera chip, exposure read-out, per-camera shots (presets 8/9), joystick + zoom rocker + Focus, speed slider, FADE/CUT/BLACK/LOWER THIRDS. Gear dialog keeps keys, presets 1-9 and focus near/far |
+| UI wiring | Replicates the macOS operator screen: NEXT/LIVE monitors, live source thumbnails with NEXT/LIVE badges, camera chip, exposure read-out, per-camera shot rows (saved shots, or named presets), joystick + zoom rocker + Focus, speed slider, FADE/CUT/BLACK/LOWER THIRDS. Gear dialog keeps keys, presets 1-9 and focus near/far |
 
 Gates G1 and G4 are verified at the transport level with a local test pattern; the camera NDI|HX stream and OBS `OBS PGM` still need a real check on the devices. Gate G2 is verified against the fake switcher only, because the ATEM was powered down; `CueVideo.Spike -- atem 192.168.10.159 10` settles it when the console is on.
 

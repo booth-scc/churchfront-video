@@ -122,7 +122,7 @@ The six fake feeds are named `CueVideo CAM1` â€¦ `CueVideo CAM6`; map them t
 
 `%APPDATA%\CueVideo\config.json`, same schema as the macOS app (`atemHost`, `me`, `sources`, `cameras`, `keys`, `pictures`, `trackSpeed`, ...), with unknown keys preserved and a `config.last-good.json` fallback. On first run the audited booth setup is written as the default. `CUEVIDEO_CONFIG_DIR` points the app at another folder.
 
-Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; the app recalls 1-9 with their configured names ("Full Stage", "Sermon").
+Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; the app recalls 1-9 with their configured names ("Full Stage", "Sermon"). Each camera's shot row shows its saved shots from `shots`, in file order: a place shot moves the camera to its counts, an exposure shot sets its exposure. A camera with no saved shots falls back to the presets named in `presetNames`, ordered by `presetOrder` and then number.
 
 ## Layout
 

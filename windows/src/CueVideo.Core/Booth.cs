@@ -153,6 +153,40 @@ public sealed class Booth : IDisposable
     }
 
     /// <summary>
+    /// Recalls one button of a camera's shot row: a saved place shot moves the camera to its
+    /// counts, a saved exposure shot sets its exposure, and a preset button recalls the preset
+    /// stored on the camera.
+    /// </summary>
+    public async Task RecallShotAsync(int input, ShotButton button)
+    {
+        if (Cameras.LinkFor(input) is not { } link) return;
+
+        if (button.Preset is { } preset)
+        {
+            link.Recall(preset);
+            return;
+        }
+
+        if (button.Shot is not { } shot) return;
+
+        if (shot.IsExposure)
+        {
+            if (shot.ExposureValues is { } exposure)
+            {
+                await link.SetExposureAsync(exposure);
+
+                int preview;
+                lock (_gate) preview = PreviewLocked();
+                if (preview == input) await RefreshExposureAsync();
+            }
+
+            return;
+        }
+
+        if (shot.Position is { } position) link.GoTo(position);
+    }
+
+    /// <summary>
     /// Forgets the camera links and the exposure rows, for a config reload. The caller
     /// renders again once it has rebuilt anything that depends on the config.
     /// </summary>
