@@ -2,7 +2,7 @@
 
 Church production control app: an ATEM switcher surface with PTZ camera control, NDI previews, auto-tracking and stage scan. The macOS app is Swift/SwiftUI in `Sources/`; the Windows port is C#/Avalonia in `windows/`.
 
-**This fork works in `windows/` only.** `Sources/` and `Tests/` are upstream macOS (`Churchfront/churchfront-video`) and stay untouched. Windows work order: see #36.
+**This fork works in `windows/` only.** `Sources/` and `Tests/` are upstream macOS (`Churchfront/churchfront-video`) and stay untouched. Windows work order: see #36. Windows port plan: `docs/plan/churchfront-windows-port.md`. Domain terms: `GLOSSARY.md`.
 
 ## Checks
 

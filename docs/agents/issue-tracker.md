@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-> **This repo is a fork.** `origin` is `booth-scc/churchfront-video` - file issues there. `upstream` is `Churchfront/churchfront-video` and is read-only for us. A default repo is set with `gh repo set-default booth-scc/churchfront-video`; before the first issue of a session, confirm `gh repo view --json nameWithOwner` reports the fork.
+> **This repo is a fork.** `origin` is `booth-scc/churchfront-video` - file issues there. `upstream` is `Churchfront/churchfront-video` and is read-only for us. Set the default once per clone: `gh repo set-default booth-scc/churchfront-video`. Before the first issue of a session, confirm `gh repo view --json nameWithOwner` reports the fork.
 
 Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 

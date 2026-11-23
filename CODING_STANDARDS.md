@@ -12,6 +12,10 @@ Review-time rules that need judgement. Mechanical rules belong in `windows/check
 - Name state after what it is, not where it appears.
 - Pass adjacent booleans by name at call sites once there are two or more.
 
+## Feedback
+
+- Status text reports what happened. When a control cannot act (unsupported protocol, no address, no link), say why; never print success after a skipped command.
+
 ## Tests
 
 - Test behaviour at a public seam; name tests as specifications.

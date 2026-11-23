@@ -132,7 +132,7 @@ Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; th
 - **UI stack:** Avalonia 12 on .NET 10 instead of SwiftUI; design tokens copied from `churchfront-kit`.
 - **Root `.gitignore`** anchors the macOS `.app` patterns (`/CueVideo.app/`). Windows Git folds case, so the unanchored pattern was silently ignoring `windows/src/CueVideo.App`.
 
-## Gate checklist (see `../.opencode/plan/churchfront-windows-port.md`)
+## Gate checklist (see `../docs/plan/churchfront-windows-port.md`)
 
 1. G1 - one camera NDI|HX stream at 30 fps for 10 minutes
 2. G2 - ATEM tally mirrors Companion within 200 ms
