@@ -1,6 +1,6 @@
 # Churchfront Video - Windows port plan
 
-Status: planning. No code written. Upstream: `techwiz18/churchfront-video` (Apache-2.0, SwiftUI, macOS 14+).
+Status: in progress. Phase 0/1 implemented; see `windows/README.md`. Upstream: `techwiz18/churchfront-video` (Apache-2.0, SwiftUI, macOS 14+).
 Target: the Windows 11 live-stream PC in the booth. The church maintains its own fork.
 
 ---
@@ -62,7 +62,7 @@ These are Phase 0 gates, not plan blockers.
 - ATEM instance: `bonjourHost 192.168.10.159:9910`, `autoModelID 18` (1 M/E Constellation HD), ATEM camera control disabled.
 - The Cam-1 variables page reports "no variables" while the cameras are offline. The module publishes speed/position variables only when connected, so this is a hint, not proof, that VISCA readback works. Gate 3 still decides.
 - Consequence for the port: the app's camera panel should mirror the Companion mental model (D-pad, zoom in/out, focus near/far, presets) so volunteers recognise it, and it must not touch presets 1-9.
-- Full page-by-page capture, including every button action and feedback: `companion-capture.md`, with the raw export under `companion/`.
+- Full page-by-page capture, including every button action and feedback: `companion-capture.md`, with the raw export under the machine-local `%USERPROFILE%\.opencode\plan\companion\`.
 
 ### 2.2 OBS structure (read-only review 2026-11-20)
 

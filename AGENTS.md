@@ -6,7 +6,7 @@ Church production control app: an ATEM switcher surface with PTZ camera control,
 
 ## Checks
 
-Run `powershell -ExecutionPolicy Bypass -File windows\check.ps1` before committing. It builds the Windows solution and runs the test suite.
+Run `powershell -ExecutionPolicy Bypass -File windows\check.ps1` before committing. It builds the Windows solution and runs the test suite. After it passes, commit and push to `origin/main`; close the ticket with a summary comment once the Windows checks pass (see `docs/agents/issue-tracker.md`).
 
 ## Agent skills
 
