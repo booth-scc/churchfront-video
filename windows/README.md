@@ -39,7 +39,7 @@ Before closing a shortcut, focus or dialog change, check by hand:
 powershell -ExecutionPolicy Bypass -File windows\check.ps1
 ```
 
-This builds the solution and runs `windows/tests/CueVideo.Tests`. CI runs the same script on Windows for changes under `windows/`.
+This builds the solution, checks C# formatting (`dotnet format whitespace`) and runs `windows/tests/CueVideo.Tests`. CI runs the same script on Windows for changes under `windows/`.
 
 ## Requirements
 

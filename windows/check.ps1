@@ -10,6 +10,12 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
+Write-Host 'Checking formatting...'
+dotnet format (Join-Path $root 'ChurchfrontVideo.sln') whitespace --verify-no-changes --no-restore --verbosity minimal
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
 Write-Host 'Running tests...'
 dotnet test (Join-Path $root 'tests\CueVideo.Tests\CueVideo.Tests.csproj') --no-build --nologo --verbosity minimal
 exit $LASTEXITCODE

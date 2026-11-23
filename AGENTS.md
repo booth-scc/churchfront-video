@@ -2,11 +2,11 @@
 
 Church production control app: an ATEM switcher surface with PTZ camera control, NDI previews, auto-tracking and stage scan. The macOS app is Swift/SwiftUI in `Sources/`; the Windows port is C#/Avalonia in `windows/`.
 
-**This fork works in `windows/` only.** `Sources/` and `Tests/` are upstream macOS (`Churchfront/churchfront-video`) and stay untouched. Windows work order: see #36. Windows port plan: `docs/plan/churchfront-windows-port.md`. Domain terms: `GLOSSARY.md`.
+**This fork works in `windows/` only.** `Sources/` and `Tests/` are upstream macOS (`Churchfront/churchfront-video`) and stay untouched. Windows layout, build, checks and demo: `windows/README.md`. Windows work order: see #36. Windows port plan: `docs/plan/churchfront-windows-port.md`. Domain terms: `GLOSSARY.md`. List tracked sources with `git ls-files windows`; `bin/` and `obj/` are build output.
 
 ## Checks
 
-Run `powershell -ExecutionPolicy Bypass -File windows\check.ps1` before committing. It builds the Windows solution and runs the test suite. After it passes, commit and push to `origin/main`; close the ticket with a summary comment once the Windows checks pass (see `docs/agents/issue-tracker.md`).
+Run `powershell -ExecutionPolicy Bypass -File windows\check.ps1` before committing. It builds the Windows solution, checks C# formatting and runs the test suite. After it passes, commit and push to `origin/main`; close the ticket with a summary comment once the Windows checks pass (see `docs/agents/issue-tracker.md`).
 
 ## Agent skills
 

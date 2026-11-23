@@ -107,29 +107,29 @@ internal static class FakeSwitcher
                     break;
 
                 case "DCut":
-                {
-                    (program, preview) = (preview, program);
-                    Send(
-                        AtemPacket.Command("PrgI", 0, 0, 0, (byte)program),
-                        AtemPacket.Command("PrvI", 0, 0, 0, (byte)preview));
-                    break;
-                }
-
-                case "DAut":
-                {
-                    var target = preview;
-                    Send(AtemPacket.Command("TrPs", 0, 1, 0, 0, 0, 0));
-
-                    _ = Task.Delay(1000).ContinueWith(_ =>
                     {
-                        (program, preview) = (target, program);
+                        (program, preview) = (preview, program);
                         Send(
                             AtemPacket.Command("PrgI", 0, 0, 0, (byte)program),
-                            AtemPacket.Command("PrvI", 0, 0, 0, (byte)preview),
-                            AtemPacket.Command("TrPs", 0, 0, 0, 0, 0, 0));
-                    }, TaskScheduler.Default);
-                    break;
-                }
+                            AtemPacket.Command("PrvI", 0, 0, 0, (byte)preview));
+                        break;
+                    }
+
+                case "DAut":
+                    {
+                        var target = preview;
+                        Send(AtemPacket.Command("TrPs", 0, 1, 0, 0, 0, 0));
+
+                        _ = Task.Delay(1000).ContinueWith(_ =>
+                        {
+                            (program, preview) = (target, program);
+                            Send(
+                                AtemPacket.Command("PrgI", 0, 0, 0, (byte)program),
+                                AtemPacket.Command("PrvI", 0, 0, 0, (byte)preview),
+                                AtemPacket.Command("TrPs", 0, 0, 0, 0, 0, 0));
+                        }, TaskScheduler.Default);
+                        break;
+                    }
 
                 case "FtbA":
                     ftb = !ftb;

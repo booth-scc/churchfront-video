@@ -83,7 +83,8 @@ internal sealed class FakeAtem : IDisposable
         return data;
     }
 
-    private void Send(byte[] packet)    {
+    private void Send(byte[] packet)
+    {
         try
         {
             _udp.Send(packet, packet.Length, _client);

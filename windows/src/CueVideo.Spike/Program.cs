@@ -1,4 +1,4 @@
-﻿using CueVideo.Atem;
+using CueVideo.Atem;
 using CueVideo.Ndi;
 using System.Runtime.InteropServices;
 

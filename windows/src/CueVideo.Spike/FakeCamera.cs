@@ -92,27 +92,27 @@ internal static class FakeCamera
                 break;
 
             case (0x04, 0x3F) when p.Length >= 7:
-            {
-                var slot = p[5];
-                switch (p[4])
                 {
-                    case 0x01:
-                        presets[slot] = (pan, tilt, zoom);
-                        break;
-                    case 0x02:
-                        if (presets.TryGetValue(slot, out var preset))
-                        {
-                            pan = preset.Pan;
-                            tilt = preset.Tilt;
-                            zoom = preset.Zoom;
-                        }
-                        break;
-                    case 0x00:
-                        presets.Remove(slot);
-                        break;
+                    var slot = p[5];
+                    switch (p[4])
+                    {
+                        case 0x01:
+                            presets[slot] = (pan, tilt, zoom);
+                            break;
+                        case 0x02:
+                            if (presets.TryGetValue(slot, out var preset))
+                            {
+                                pan = preset.Pan;
+                                tilt = preset.Tilt;
+                                zoom = preset.Zoom;
+                            }
+                            break;
+                        case 0x00:
+                            presets.Remove(slot);
+                            break;
+                    }
+                    break;
                 }
-                break;
-            }
         }
     }
 

@@ -6,6 +6,8 @@ Review-time rules that need judgement. Mechanical rules belong in `windows/check
 
 - `CueVideo.Core` holds policy and decisions. It does not use Avalonia types.
 - The window is an adapter: it turns view visibility, dialogs and focus into plain values for Core, and renders what Core returns. Shortcut policy does not live in the window.
+- A client seam lives with the client project (`ISwitcher` in `CueVideo.Atem`); a Core adapter that forwards every member is a middle man.
+- After an adapter rebuilds controls from config, re-apply the Core snapshot immediately; don't wait for the next device packet.
 
 ## Naming
 
@@ -20,4 +22,5 @@ Review-time rules that need judgement. Mechanical rules belong in `windows/check
 
 - Test behaviour at a public seam; name tests as specifications.
 - A policy table can be one theory. Wiring still needs its own check.
+- A test named for a configuration sets it away from the default, or it proves nothing.
 - Any shortcut, focus or dialog safety change needs either an Avalonia headless test or the manual checklist in `windows/README.md`.
