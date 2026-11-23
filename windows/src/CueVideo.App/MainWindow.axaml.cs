@@ -105,6 +105,7 @@ public partial class MainWindow : Window
         WireTransport();
         WireCameraPanel();
         WireSpeed();
+        UpdateCameraProtocolNotice();
 
         _atem = new AtemClient();
         _atem.LinkChanged += link => Dispatcher.UIThread.Post(() => ShowLink(link));
@@ -256,6 +257,10 @@ public partial class MainWindow : Window
         foreach (var thumb in _thumbs) thumb.Dispose();
         _thumbs.Clear();
 
+        // A camera may have changed address or protocol; never keep driving the old one.
+        foreach (var link in _links.Values) link.Dispose();
+        _links.Clear();
+
         BuildSourceTiles();
 
         var host = _config.Config.AtemHost;
@@ -269,6 +274,7 @@ public partial class MainWindow : Window
         _nextNdiName = null;
         UpdateLiveTile(_programInput);
         UpdateNextTile();
+        UpdateCameraProtocolNotice();
         BuildShots();
         _ = ShowExposureAsync();
     }
@@ -333,14 +339,33 @@ public partial class MainWindow : Window
     private ViscaIpLink? LinkFor(int input)
     {
         var camera = _config.Config.CameraForInput(input);
-        if (camera is null || string.IsNullOrWhiteSpace(camera.Host)) return null;
+        if (camera is null || !camera.IsSupported) return null;
 
         if (_links.TryGetValue(input, out var existing)) return existing;
 
-        var link = new ViscaIpLink(camera.Host, camera.EffectivePort, camera.FirstPreset);
-        link.Start();
-        _links[input] = link;
+        var link = CameraLinks.Open(camera);
+        if (link is not null) _links[input] = link;
         return link;
+    }
+
+    private void UpdateCameraProtocolNotice()
+    {
+        var camera = _config.Config.CameraForInput(_nextInput);
+        var unsupported = camera is { IsSupported: false };
+
+        CameraProtocolNotice.IsVisible = unsupported;
+        CameraProtocolNotice.Text = unsupported
+            ? $"{camera!.ProtocolLabel} · unsupported by this port"
+            : "";
+    }
+
+    /// <summary>Why the camera on Next cannot be driven, for buttons that would otherwise lie.</summary>
+    private string CannotDriveReason()
+    {
+        var camera = _config.Config.CameraForInput(_nextInput);
+        if (camera is null) return "No camera on Next.";
+        if (!camera.IsSupported) return $"{camera.Name} · {camera.ProtocolLabel} unsupported by this port.";
+        return $"{camera.Name} has no address.";
     }
 
     private void BuildShots()
@@ -374,6 +399,8 @@ public partial class MainWindow : Window
                 HorizontalContentAlignment = HorizontalAlignment.Center,
             };
 
+            if (!camera.IsSupported) ToolTip.SetTip(cameraButton, $"{camera.ProtocolLabel} unsupported by this port");
+
             cameraButton.Click += (_, _) => _atem?.SetPreview(input);
 
             row.Children.Add(cameraButton);
@@ -391,11 +418,13 @@ public partial class MainWindow : Window
                     FontSize = 9.5,
                     Padding = new Thickness(6, 2),
                     Classes = { "ghost" },
+                    IsEnabled = camera.IsSupported,
                 };
 
                 var slot = preset;
                 var cameraInput = input;
                 shot.Click += (_, _) => LinkFor(cameraInput)?.Recall(slot);
+                if (!camera.IsSupported) ToolTip.SetTip(shot, $"{camera.ProtocolLabel} unsupported by this port");
 
                 Grid.SetColumn(shot, column++);
                 row.Children.Add(shot);
@@ -408,7 +437,11 @@ public partial class MainWindow : Window
     private async Task ShowExposureAsync()
     {
         var camera = _config.Config.CameraForInput(_nextInput);
-        ExposureCamText.Text = camera is null ? "No camera on Next" : $"{camera.Name} exposure";
+        ExposureCamText.Text = camera is null
+            ? "No camera on Next"
+            : camera.IsSupported
+                ? $"{camera.Name} exposure"
+                : $"{camera.Name} · {camera.ProtocolLabel} unsupported";
 
         var link = Link();
         if (link is null)
@@ -533,6 +566,7 @@ public partial class MainWindow : Window
 
         var camera = _config.Config.CameraForInput(_nextInput);
         CameraChipName.Text = camera?.Name ?? state.Name(_nextInput);
+        UpdateCameraProtocolNotice();
 
         BuildShots();
         UpdateNextTile();
@@ -660,7 +694,13 @@ public partial class MainWindow : Window
             var slot = number;
             save.Click += (_, _) =>
             {
-                Link()?.Store(slot);
+                if (Link() is not { } link)
+                {
+                    saveStatus.Text = CannotDriveReason();
+                    return;
+                }
+
+                link.Store(slot);
                 saveStatus.Text = $"Saved the current view to camera preset {slot}.";
             };
 
@@ -668,7 +708,13 @@ public partial class MainWindow : Window
             recall.Width = 68;
             recall.Click += (_, _) =>
             {
-                Link()?.Recall(slot);
+                if (Link() is not { } link)
+                {
+                    saveStatus.Text = CannotDriveReason();
+                    return;
+                }
+
+                link.Recall(slot);
                 saveStatus.Text = $"Recalled camera preset {slot}.";
             };
 

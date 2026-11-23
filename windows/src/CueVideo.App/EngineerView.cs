@@ -6,7 +6,6 @@ using Avalonia.Media;
 using System.Collections.ObjectModel;
 using CueVideo.Core;
 using CueVideo.Ndi;
-using CueVideo.Visca;
 
 namespace CueVideo.App;
 
@@ -146,13 +145,13 @@ public sealed class EngineerView : UserControl
 
         var cameras = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("110,130,70,70,70,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("110,130,70,70,70,190,Auto"),
             RowDefinitions = new RowDefinitions("Auto"),
             RowSpacing = 6,
             ColumnSpacing = 6,
         };
 
-        var headers = new[] { "NAME", "ADDRESS", "PORT", "INPUT", "PRESET", "" };
+        var headers = new[] { "NAME", "ADDRESS", "PORT", "INPUT", "PRESET", "PROTOCOL", "" };
         for (var i = 0; i < headers.Length; i++)
         {
             cameras.Children.Add(Cell(new TextBlock { Text = headers[i], FontSize = 9, Foreground = Muted }, i, 0));
@@ -202,12 +201,24 @@ public sealed class EngineerView : UserControl
                 });
             };
 
+            var protocol = new TextBlock
+            {
+                Text = camera.IsSupported
+                    ? camera.ProtocolLabel
+                    : $"{camera.ProtocolLabel} · UNSUPPORTED",
+                FontSize = 10,
+                Foreground = camera.IsSupported ? InkDim : Bad,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+            };
+
             cameras.Children.Add(Cell(name, 0, row));
             cameras.Children.Add(Cell(host, 1, row));
             cameras.Children.Add(Cell(port, 2, row));
             cameras.Children.Add(Cell(input, 3, row));
             cameras.Children.Add(Cell(preset, 4, row));
-            cameras.Children.Add(Cell(test, 5, row));
+            cameras.Children.Add(Cell(protocol, 5, row));
+            cameras.Children.Add(Cell(test, 6, row));
             row++;
         }
 
@@ -252,6 +263,15 @@ public sealed class EngineerView : UserControl
         panel.Children.Add(_sourceList);
 
         panel.Children.Add(Heading("CAMERAS"));
+
+        var unsupported = _config.Config.UnsupportedCameras;
+        if (unsupported.Count > 0)
+        {
+            panel.Children.Add(Note(
+                "This port drives VISCA over IP only. Not driven: " +
+                string.Join(", ", unsupported.Select(c => $"{c.Name} ({c.ProtocolLabel})"))));
+        }
+
         var results = new StackPanel { Spacing = 4 };
         var testAll = Ghost("Test all cameras");
         testAll.Click += async (_, _) =>
@@ -279,10 +299,11 @@ public sealed class EngineerView : UserControl
 
     private async Task<string> ReadCameraAsync(PtzCameraConfig camera)
     {
-        if (string.IsNullOrWhiteSpace(camera.Host)) return "no address";
+        if (!camera.IsSupported) return $"unsupported · {camera.ProtocolLabel}";
 
-        using var link = new ViscaIpLink(camera.Host, camera.EffectivePort, camera.FirstPreset);
-        link.Start();
+        using var link = CameraLinks.Open(camera);
+        if (link is null) return "no address";
+
         var position = await link.ReadPositionAsync(counts: true, TimeSpan.FromSeconds(2));
 
         return position is { } value

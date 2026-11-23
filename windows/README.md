@@ -13,6 +13,14 @@ Toggle it in the header, or launch with `--engineer`. Two pages:
 - **Setup** - scan NDI, assign a feed to each input (saved to `pictures`), edit camera name/address/port/input/first preset, test a camera's VISCA reply, change the switcher address.
 - **Status** - what the app can see: NDI sources found, camera reply test for all cameras, switcher address.
 
+Cameras are driven with VISCA over IP (`proto: "sonyUDP"`) only. A Mac config that names `rawTCP` or `canonXC` cameras still loads, but they are marked **UNSUPPORTED** in Setup and Status, and the operator screen shows an unsupported notice under the camera-on-Next chip. No VISCA is sent to them, and preset save/recall says why instead of claiming success. Set the camera to VISCA over IP (and its `proto` to `sonyUDP`) before relying on it here.
+
+To check the protocol gate by hand, add a camera with `"proto": "canonXC"` and a fake address to `%APPDATA%\CueVideo\config.json`, then:
+
+- Engineer > Setup shows `Canon (HTTP) · UNSUPPORTED` for that row, and Test reports unsupported without sending.
+- Put that camera on Next: the operator chip shows the notice under it.
+- Open the gear dialog and press Save 20 / Go 20: the status line says the camera is unsupported and no preset is written.
+
 Every edit is written straight to `config.json`, and the operator window reloads its tiles and feeds without restarting.
 
 ## Operator shortcuts and saving
@@ -107,7 +115,7 @@ Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; th
 | Path | Purpose | Ported from |
 |---|---|---|
 | `src/CueVideo.Atem` | ATEM UDP 9910 client, state store, dedup | `Sources/CueATEM/ATEM.swift` |
-| `src/CueVideo.Visca` | VISCA-IP 52381 + raw TCP 5678, units/calibration | `Sources/CueATEM/PTZ.swift` (VISCALink, ViscaUnits) |
+| `src/CueVideo.Visca` | VISCA-IP 52381, units/calibration (raw TCP is not ported) | `Sources/CueATEM/PTZ.swift` (VISCALink, ViscaUnits) |
 | `src/CueVideo.Ndi` | P/Invoke to the NDI runtime, receive + discovery | `Sources/NDIBridge`, `NDIFeed.swift` |
 | `src/CueVideo.Vision` | ONNX Runtime DirectML pose/identity | `Tracker.swift`, `Identity.swift` |
 | `src/CueVideo.Core` | Config, orchestration, tracking, stage scan | `Config.swift`, `StageScan.swift`, `ControlServer.swift` |

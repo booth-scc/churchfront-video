@@ -87,6 +87,9 @@
                         </StackPanel>
                     </Border>
 
+                    <TextBlock x:Name="CameraProtocolNotice" FontSize="9" Foreground="{StaticResource Program}"
+                               TextWrapping="Wrap" IsVisible="False" />
+
                     <Grid ColumnDefinitions="*,Auto" Margin="0,2,0,0">
                         <TextBlock Grid.Column="0" Text="EXPOSURE" Classes="label" VerticalAlignment="Center" />
                         <Button x:Name="ExposureAutoButton" Grid.Column="1" Classes="ghost" Content="Auto" FontSize="9" Padding="8,2" />

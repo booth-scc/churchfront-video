@@ -91,6 +91,11 @@ public sealed class CueConfig
 
     public PtzCameraConfig? CameraForInput(int input) =>
         Cameras.FirstOrDefault(c => c.AtemInput == input);
+
+    /// <summary>Configured cameras whose protocol this port cannot drive, for status lines.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<PtzCameraConfig> UnsupportedCameras =>
+        Cameras.Where(c => !c.IsSupported).ToList();
 }
 
 public sealed class VolunteerSource
@@ -122,9 +127,9 @@ public sealed class PtzCameraConfig
     [JsonPropertyName("port")]
     public int? Port { get; set; }
 
-    /// <summary>"sonyUDP", "rawTCP" or a macOS-only "canonXC"; only sonyUDP is used here.</summary>
+    /// <summary>"sonyUDP", "rawTCP" or "canonXC" from the macOS config. Only sonyUDP is ported.</summary>
     [JsonPropertyName("proto")]
-    public string Proto { get; set; } = "sonyUDP";
+    public string Proto { get; set; } = CameraProtocols.SonyUdp;
 
     [JsonPropertyName("atemInput")]
     public int? AtemInput { get; set; }
@@ -142,7 +147,13 @@ public sealed class PtzCameraConfig
     public Dictionary<string, JsonElement>? Extra { get; set; }
 
     [JsonIgnore]
-    public int EffectivePort => Port ?? (Proto == "sonyUDP" ? 52381 : 5678);
+    public bool IsSupported => CameraProtocols.IsSupported(Proto);
+
+    [JsonIgnore]
+    public string ProtocolLabel => CameraProtocols.Label(Proto);
+
+    [JsonIgnore]
+    public int EffectivePort => Port ?? CameraProtocols.DefaultPort(Proto);
 
     public string PresetName(int number) =>
         PresetNames.TryGetValue(number.ToString(), out var name) && name.Length > 0 ? name : number.ToString();
