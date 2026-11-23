@@ -124,6 +124,10 @@ The six fake feeds are named `CueVideo CAM1` â€¦ `CueVideo CAM6`; map them t
 
 `%APPDATA%\CueVideo\config.json`, same schema as the macOS app (`atemHost`, `me`, `sources`, `cameras`, `keys`, `pictures`, `trackSpeed`, ...), with unknown keys preserved and a `config.last-good.json` fallback. On first run the audited booth setup is written as the default. `CUEVIDEO_CONFIG_DIR` points the app at another folder; a run with any `CUEVIDEO_` setting is a demo or self-test and never writes the setup. The store polls the file every half second, so a hand edit reaches the operator screen without a restart, and a file that will not parse is copied to `config.unreadable-<timestamp>.json` before the next save replaces it.
 
+Screens, routes, framing rules and `trackTuning` are typed models even though the Windows UI does not route yet, so a Mac-written setup exposes them to Windows code instead of an opaque blob.
+
+The config contract is pinned by the fixtures in `windows/tests/fixtures/config`: Mac-written documents in `mac-written/` (an empty setup, a full setup and a file full of unknown keys), a hand-written minimal file in `hand-written/`, and a broken file in `invalid/`. `ConfigContractTests` loads each fixture through the store, saves it, and checks a Mac-written document comes back with the same keys and values; a hand-written one keeps what it says, and the broken one is reported and left as written. A renamed field fails the typed assertions. Add a fixture to widen the contract rather than restating the schema in a test.
+
 Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; the app recalls 1-9 with their configured names ("Full Stage", "Sermon"). Each camera's shot row shows its saved shots from `shots`, in file order: a place shot moves the camera to its counts, an exposure shot sets its exposure. A camera with no saved shots falls back to the presets named in `presetNames`, ordered by `presetOrder` and then number.
 
 ## Layout
@@ -137,7 +141,7 @@ Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; th
 | `src/CueVideo.Core` | Booth (config + switcher state + one render snapshot), config, orchestration, tracking, stage scan | `Config.swift`, `App.swift` (Booth), `StageScan.swift`, `ControlServer.swift` |
 | `src/CueVideo.App` | Avalonia operator UI | `VolunteerView.swift` and friends |
 | `src/CueVideo.Spike` | Phase 0 doctor and gate harness | `Tools/fake_atem.py` + `SelfTest.swift` |
-| `tests/CueVideo.Tests` | Unit tests | `Tests/` |
+| `tests/CueVideo.Tests` | Unit tests, including the config contract replay | `Tests/` |
 | `tests/CueVideo.App.Tests` | Headless Avalonia window tests (config reload rebuilds tiles and status) | manual demo checklist |
 | `tests/CueVideo.TestSupport` | Shared test doubles, such as the fake switcher | |
 

@@ -1,0 +1,17 @@
+{
+  "atemHost": "",
+  "cameras": [],
+  "framing": {},
+  "keys": [],
+  "me": 1,
+  "mixNames": [],
+  "pictures": {},
+  "ptzSpeed": 1,
+  "routes": [],
+  "screens": [],
+  "sources": [],
+  "trackSpeed": 1,
+  "trackTilt": true,
+  "trackTuning": {},
+  "trackZoom": true
+}

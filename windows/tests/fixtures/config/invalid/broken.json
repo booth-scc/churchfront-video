@@ -1,0 +1,4 @@
+{
+  "atemHost": "192.168.10.159",
+  "screens": [
+    { "name": "Lobby TVs", "aux": [4, 5] }

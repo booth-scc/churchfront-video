@@ -1,0 +1,55 @@
+{
+  "atemHost": "192.168.10.159",
+  "cameras": [],
+  "framing": {
+    "waist": {
+      "eyeLine": 0.25,
+      "futureFrame": "keep me"
+    }
+  },
+  "futureRoot": {
+    "enabled": true,
+    "weight": 2
+  },
+  "keys": [],
+  "me": 1,
+  "mixNames": [],
+  "pictures": {},
+  "ptzSpeed": 1,
+  "routes": [
+    {
+      "futureRoute": [
+        7,
+        8
+      ],
+      "label": "Lobby",
+      "set": [
+        {
+          "aux": 4,
+          "futureChange": 7,
+          "source": 10010
+        }
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "aux": [
+        4
+      ],
+      "futureScreen": {
+        "wired": "converter 4"
+      },
+      "name": "Lobby TVs",
+      "volunteer": true
+    }
+  ],
+  "sources": [],
+  "trackSpeed": 1,
+  "trackTilt": true,
+  "trackTuning": {
+    "futureTuning": 3,
+    "latency": 0.5
+  },
+  "trackZoom": true
+}

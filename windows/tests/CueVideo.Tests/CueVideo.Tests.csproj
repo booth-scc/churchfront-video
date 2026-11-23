@@ -22,6 +22,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\fixtures\config\**\*.json">
+      <Link>fixtures\config\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\CueVideo.Core\CueVideo.Core.csproj" />
     <ProjectReference Include="..\..\src\CueVideo.Atem\CueVideo.Atem.csproj" />
     <ProjectReference Include="..\..\src\CueVideo.Visca\CueVideo.Visca.csproj" />

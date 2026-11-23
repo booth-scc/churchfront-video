@@ -46,19 +46,42 @@ public sealed class CueConfig
     public Dictionary<string, string> Pictures { get; set; } = new();
 
     [JsonPropertyName("screens")]
-    public List<JsonElement> Screens { get; set; } = [];
+    public List<ScreenOutput> Screens
+    {
+        get => _screens;
+        set => _screens = value ?? [];
+    }
 
     [JsonPropertyName("routes")]
-    public List<JsonElement> Routes { get; set; } = [];
+    public List<RouteButton> Routes
+    {
+        get => _routes;
+        set => _routes = value ?? [];
+    }
 
+    /// <summary>Follow-shot framing changes, by size: "shoulders", "waist" or "full".</summary>
     [JsonPropertyName("framing")]
-    public Dictionary<string, JsonElement> Framing { get; set; } = new();
+    public Dictionary<string, FramingRule> Framing
+    {
+        get => _framing;
+        set => _framing = value ?? new();
+    }
 
     [JsonPropertyName("trackTuning")]
-    public JsonElement? TrackTuning { get; set; }
+    public TrackTuning TrackTuning
+    {
+        get => _trackTuning;
+        set => _trackTuning = value ?? new();
+    }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extra { get; set; }
+
+    // The Mac reads a missing or null top-level section as empty, as each key does there.
+    private List<ScreenOutput> _screens = [];
+    private List<RouteButton> _routes = [];
+    private Dictionary<string, FramingRule> _framing = new();
+    private TrackTuning _trackTuning = new();
 
     /// <summary>The booth as audited on 2026-11-20, used only when no config file exists.</summary>
     public static CueConfig BoothDefaults() => new()
@@ -295,6 +318,116 @@ public sealed class KeyButtonConfig
 
     [JsonPropertyName("ndi")]
     public string? Ndi { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+/// <summary>
+/// A screen or other destination fed by one or more switcher aux outputs, counted from 1.
+/// Auxes listed together switch together, such as a left and right pair.
+/// </summary>
+public sealed class ScreenOutput
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("aux")]
+    public List<int> Aux { get; set; } = [];
+
+    /// <summary>How it is wired, for the Routing page: "Converter 1 → LED processor".</summary>
+    [JsonPropertyName("note")]
+    public string? Note { get; set; }
+
+    /// <summary>Shown in the volunteer's screen summary. Off for encoders, recorders and patch bay feeds.</summary>
+    [JsonPropertyName("volunteer")]
+    public bool? Volunteer { get; set; }
+
+    /// <summary>Shown as a small live preview in the top bar.</summary>
+    [JsonPropertyName("pinned")]
+    public bool? Pinned { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+/// <summary>One change a routing button makes: send this source to this aux, counted from 1.</summary>
+public sealed class RouteChange
+{
+    [JsonPropertyName("aux")]
+    public int Aux { get; set; }
+
+    [JsonPropertyName("source")]
+    public int Source { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+/// <summary>A volunteer button that routes one or more screens at once, like a macro.</summary>
+public sealed class RouteButton
+{
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = "";
+
+    [JsonPropertyName("set")]
+    public List<RouteChange> Set { get; set; } = [];
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+/// <summary>
+/// How a follow shot is framed. Any part left out uses the built-in standard. Measured as a
+/// share of the frame: <see cref="EyeLine"/> down from the top, <see cref="Scale"/> is eyes to
+/// shoulders against frame height (bigger is tighter), <see cref="LeadRoom"/> the offset toward
+/// where the subject faces or walks, and <see cref="DeadX"/> and <see cref="DeadY"/> how far
+/// they can drift before the camera moves.
+/// </summary>
+public sealed class FramingRule
+{
+    [JsonPropertyName("eyeLine")]
+    public double? EyeLine { get; set; }
+
+    [JsonPropertyName("scale")]
+    public double? Scale { get; set; }
+
+    [JsonPropertyName("leadRoom")]
+    public double? LeadRoom { get; set; }
+
+    [JsonPropertyName("deadX")]
+    public double? DeadX { get; set; }
+
+    [JsonPropertyName("deadY")]
+    public double? DeadY { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+/// <summary>
+/// Tracking response, for tuning while it runs. Any member left out uses the built-in value:
+/// <see cref="Correction"/> pulls toward the framing mark, <see cref="Latency"/> is how far
+/// behind the preview picture runs in seconds, <see cref="WalkThreshold"/> how fast (frames a
+/// second) counts as walking, <see cref="ZoomThreshold"/> how wrong the size must look before
+/// zooming as a log ratio, and <see cref="ZoomWait"/> how long it must stay wrong first.
+/// </summary>
+public sealed class TrackTuning
+{
+    [JsonPropertyName("correction")]
+    public double? Correction { get; set; }
+
+    [JsonPropertyName("latency")]
+    public double? Latency { get; set; }
+
+    [JsonPropertyName("walkThreshold")]
+    public double? WalkThreshold { get; set; }
+
+    [JsonPropertyName("zoomThreshold")]
+    public double? ZoomThreshold { get; set; }
+
+    [JsonPropertyName("zoomWait")]
+    public double? ZoomWait { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extra { get; set; }

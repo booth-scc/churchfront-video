@@ -1,0 +1,137 @@
+{
+  "atemHost": "192.168.10.159",
+  "cameras": [
+    {
+      "atemInput": 1,
+      "firstPreset": 20,
+      "host": "192.168.10.183",
+      "id": "8c0a1e52-3b7a-4b8e-9e3a-5b1d2f0c7a11",
+      "name": "Cam-1",
+      "port": 52381,
+      "presetNames": {
+        "8": "Full Stage",
+        "9": "Sermon"
+      },
+      "presetOrder": [
+        9,
+        8
+      ],
+      "proto": "sonyUDP",
+      "shots": [
+        {
+          "id": "9a0f2b51-6f7c-4a1d-8f0e-2c3d4b5a6e71",
+          "kind": "position",
+          "name": "Stage",
+          "pan": 1200,
+          "tilt": -300,
+          "zoom": 4000
+        },
+        {
+          "exposure": {
+            "gain": 6,
+            "kelvin": 4300,
+            "wb": "auto"
+          },
+          "id": "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+          "kind": "exposure",
+          "name": "Dim"
+        }
+      ]
+    }
+  ],
+  "framing": {
+    "full": {
+      "eyeLine": 0.18,
+      "leadRoom": 0.2,
+      "scale": 0.2
+    },
+    "waist": {
+      "deadX": 0.03,
+      "deadY": 0.02,
+      "eyeLine": 0.24,
+      "leadRoom": 0.12,
+      "scale": 0.42
+    }
+  },
+  "keys": [
+    {
+      "keyer": 1,
+      "label": "Lower thirds",
+      "me": 1,
+      "ndi": "GRAPHICS-MAC (CueScreens Lower Thirds)"
+    }
+  ],
+  "me": 1,
+  "mixNames": [
+    "Live stream",
+    "Side screens"
+  ],
+  "pictures": {
+    "4": "GRAPHICS-MAC (CueScreens Stage)"
+  },
+  "ptzSpeed": 0.75,
+  "routes": [
+    {
+      "label": "Lobby: stream",
+      "set": [
+        {
+          "aux": 4,
+          "source": 10010
+        },
+        {
+          "aux": 5,
+          "source": 10010
+        }
+      ]
+    },
+    {
+      "label": "Side: program",
+      "set": [
+        {
+          "aux": 8,
+          "source": 1
+        }
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "aux": [
+        4,
+        5
+      ],
+      "name": "Lobby TVs",
+      "note": "Converters 4 and 5",
+      "pinned": true,
+      "volunteer": true
+    },
+    {
+      "aux": [
+        6
+      ],
+      "name": "Recorder",
+      "volunteer": false
+    }
+  ],
+  "sources": [
+    {
+      "input": 1,
+      "label": "CAM 1"
+    },
+    {
+      "input": 4,
+      "label": "Graphics",
+      "ndi": "GRAPHICS-MAC (CueScreens Stage)"
+    }
+  ],
+  "trackTilt": false,
+  "trackSpeed": 1.4,
+  "trackTuning": {
+    "correction": 1.4,
+    "latency": 0.4,
+    "walkThreshold": 0.2,
+    "zoomThreshold": 0.25,
+    "zoomWait": 2.0
+  },
+  "trackZoom": true
+}
