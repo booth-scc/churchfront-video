@@ -14,7 +14,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Count open blockers**: `gh api repos/<owner>/<repo>/issues/<n> --jq .issue_dependencies_summary.blocked_by` (open blockers only; 0 means startable). `gh issue view <n> --json blockedBy` also lists closed blockers, so filter it: `--jq '[.blockedBy.nodes[] | select(.state == "OPEN")] | length'`.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`. Use `--body-file` for Markdown; see **Writing issue text on Windows**.
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **Close**: for implementation work, put `Refs #<n>` in the commit (not `Closes #<n>`), push, and confirm `git log origin/main..HEAD` is empty (or the PR is merged). Wait for the `Windows checks` run for that push to pass when it runs. Then post the explanation with `gh issue comment <number> --body-file <file>`, then `gh issue close <number>`. On an already-closed issue, `gh issue close --comment` drops the comment and still exits 0.
+- **Close**: for implementation work, put `Refs #<n>` in the commit (not `Closes #<n>`), push, and confirm `git log origin/main..HEAD` is empty (or the PR is merged). Wait for the `Windows checks` run for that push to pass when it runs. Then post the explanation with `gh issue comment <number> --body-file <file>`, then `gh issue close <number>`. That same session, refresh the work-order map (#36): move the ticket to **Done**, remove it from its track, refresh **Frontier now**, and drop any satisfied gate. On an already-closed issue, `gh issue close --comment` drops the comment and still exits 0.
 
 ### Writing issue text on Windows
 
