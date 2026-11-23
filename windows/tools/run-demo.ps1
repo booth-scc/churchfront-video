@@ -1,11 +1,17 @@
 # Starts the demo booth: fake ATEM, four fake VISCA cameras and six NDI feeds, then the app.
 # Everything it writes lives under %APPDATA%\CueVideo, so nothing depends on the temp folder.
+#
+# It refuses to start while OBS or Churchfront Video is already running. Pass -Force to stop
+# the app first. Pass -Build to run the freshly built Debug app instead of dist\publish.
+
+param([switch]$Force, [switch]$Build)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $spike = Join-Path $root 'src\CueVideo.Spike\bin\Debug\net10.0\CueVideo.Spike.exe'
 $appExe = Join-Path $root 'dist\publish\CueVideo.App.exe'
-if (-not (Test-Path $appExe)) { $appExe = Join-Path $root 'src\CueVideo.App\bin\Debug\net10.0\CueVideo.App.exe' }
+if ($Build -or -not (Test-Path $appExe)) { $appExe = Join-Path $root 'src\CueVideo.App\bin\Debug\net10.0\CueVideo.App.exe' }
+Write-Host "App: $appExe"
 
 $demo = Join-Path $env:APPDATA 'CueVideo\demo'
 New-Item -ItemType Directory -Force $demo | Out-Null
@@ -40,11 +46,27 @@ $config = @'
 
 Set-Content -Path (Join-Path $demo 'config.json') -Value $config -Encoding UTF8
 
-if (-not (Test-Path $spike)) {
-    [System.Windows.Forms.MessageBox]::Show(
-        "The demo helpers are not built.`n`nRun: dotnet build C:\dev\churchfront-video\windows\ChurchfrontVideo.sln",
-        'Churchfront Video')
+function Stop-Demo([string]$message) {
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        [System.Windows.Forms.MessageBox]::Show($message, 'Churchfront Video') | Out-Null
+    } catch {
+        Write-Host $message
+    }
     exit 1
+}
+
+if (-not (Test-Path $spike)) {
+    Stop-Demo "The demo helpers are not built.`n`nRun: dotnet build windows\ChurchfrontVideo.sln"
+}
+
+if (-not $Force) {
+    if (Get-Process obs64 -ErrorAction SilentlyContinue) {
+        Stop-Demo "OBS is running.`n`nClose OBS before starting the demo, or run run-demo.ps1 -Force."
+    }
+    if (Get-Process CueVideo.App -ErrorAction SilentlyContinue) {
+        Stop-Demo "Churchfront Video is already running.`n`nClose it before starting the demo, or run run-demo.ps1 -Force."
+    }
 }
 
 Get-Process CueVideo.App -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue

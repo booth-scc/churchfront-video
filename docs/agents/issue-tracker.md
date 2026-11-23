@@ -24,19 +24,25 @@ PowerShell 5.1 decodes native `gh` output with the console code page. Reading a 
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 
+# `$env:TEMP` can be an 8.3 short path; LOCALAPPDATA resolves to the long path.
+$tmp = Join-Path $env:LOCALAPPDATA 'Temp\opencode'
+New-Item -ItemType Directory -Force $tmp | Out-Null
+
 $body = (gh issue view <number> --json body | ConvertFrom-Json).body
 [System.IO.File]::WriteAllText(
-    "$env:TEMP\issue.md",
+    "$tmp\issue.md",
     $body,
     [System.Text.UTF8Encoding]::new($false))
 
-# Edit $env:TEMP\issue.md, then:
-gh issue edit <number> --body-file "$env:TEMP\issue.md"
+# Edit "$tmp\issue.md", then:
+gh issue edit <number> --body-file "$tmp\issue.md"
 ```
 
 Re-read the result before editing; a single-line body or a broken arrow means the encoding is wrong. Avoid complex `--jq` expressions when you will write the text back.
 
 Comments have the same escaping trap. Write Markdown with backticks or several lines to a temp file and pass `--body-file`; a double-quoted `--body` keeps the backslashes from escaped backticks.
+
+`git` and `gh` write progress to stderr, which PowerShell surfaces as an error record even when the command succeeded. Check `$LASTEXITCODE` (0 means success) before retrying a push, comment or close.
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 

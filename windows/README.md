@@ -41,6 +41,12 @@ powershell -ExecutionPolicy Bypass -File windows\check.ps1
 
 This builds the solution, checks C# formatting (`dotnet format whitespace`) and runs `windows/tests/CueVideo.Tests`. CI runs the same script on Windows for changes under `windows/`.
 
+When a test fails, drop `-v q` (or add `--logger "console;verbosity=normal"`) to see the assertion message:
+
+```powershell
+dotnet test windows\tests\CueVideo.Tests\CueVideo.Tests.csproj --filter BoothTests
+```
+
 ## Requirements
 
 - .NET SDK 10 (the .NET 8 SDK that shipped with the booth PC is out of support as of November 2026)
@@ -74,6 +80,14 @@ Requires Inno Setup 6: `winget install JRSoftware.InnoSetup`.
 ## Demo shortcut
 
 `windows\tools\run-demo.ps1` (started by `run-demo.vbs`, no console window) brings up the whole demo booth: fake ATEM, four fake VISCA cameras, six NDI feeds, then the app. A desktop shortcut called **Churchfront Video (Demo)** uses the app icon and runs that script.
+
+It refuses to start while OBS or Churchfront Video is already running, so a demo cannot stop a service or the installed app. Pass `-Force` to stop the app and continue. Pass `-Build` to run the freshly built Debug app instead of `dist\publish`.
+
+`windows\tools\demo-smoke.ps1` is the non-interactive check for the operator screen: it starts the demo with the Debug build, reads the exposure rows, invokes zoom, focus, a shot-row preset and auto exposure, holds the joystick, checks the app stayed up with no crash log, then tears the demo down. Run it after changing camera wiring:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\tools\demo-smoke.ps1
+```
 
 Nothing the demo needs lives in `%TEMP%`:
 

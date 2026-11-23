@@ -344,6 +344,10 @@ public sealed class BoothTests : IDisposable
         Assert.Equal("No answer from 192.168.10.159", booth.Render().Status.Text);
     }
 
+    /// <summary>
+    /// A Booth over the booth-default config. That config already names Cam-1..4 on inputs
+    /// 1-4, so a test named for a camera setup must clear or replace them.
+    /// </summary>
     private Booth NewBooth(out FakeSwitcher switcher)
     {
         var store = new ConfigStore(_directory);
