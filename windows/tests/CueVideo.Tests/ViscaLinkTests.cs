@@ -75,11 +75,15 @@ public class ViscaLinkTests
         link.Store(1);
         link.Recall(8);
 
-        var deadline = DateTime.UtcNow.AddSeconds(2);
-        while (DateTime.UtcNow < deadline && camera.Received.Count < 2) await Task.Delay(25);
+        var store = ViscaCommands.PresetStore(1, 20);
+        var recall = ViscaCommands.PresetRecall(8, 20);
+        bool Received(byte[] expected) => camera.Received.Any(p => p.SequenceEqual(expected));
 
-        Assert.Contains(camera.Received, p => p.SequenceEqual(ViscaCommands.PresetStore(1, 20)));
-        Assert.Contains(camera.Received, p => p.SequenceEqual(ViscaCommands.PresetRecall(8, 20)));
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < deadline && !(Received(store) && Received(recall))) await Task.Delay(25);
+
+        Assert.Contains(camera.Received, p => p.SequenceEqual(store));
+        Assert.Contains(camera.Received, p => p.SequenceEqual(recall));
     }
 
     [Fact]

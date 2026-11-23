@@ -78,7 +78,7 @@ public partial class MainWindow : Window
             dialogOpen: OwnedWindows.Count > 0,
             textFieldFocused: textFieldFocused);
 
-        var me = _config.Config.Me - 1;
+        var me = SwitcherAddress.MeIndex(_config.Config.Me);
 
         switch (command)
         {
@@ -217,7 +217,7 @@ public partial class MainWindow : Window
 
     private void WireTransport()
     {
-        var me = _config.Config.Me - 1;
+        var me = SwitcherAddress.MeIndex(_config.Config.Me);
 
         CutButton.Click += (_, _) => _atem?.Cut(me);
         AutoButton.Click += (_, _) => _atem?.Auto(me);
@@ -740,21 +740,20 @@ public partial class MainWindow : Window
 
         dialog.Content = new ScrollViewer { Content = panel };
         dialog.ShowDialog(this);
-    }    private void ToggleKey(KeyButtonConfig key)
+    }
+
+    private void ToggleKey(KeyButtonConfig key)
     {
-        var state = _atem?.State;
+        if (key.Toggle(_atem?.State) is not { } toggle) return;
 
-        if (key.Dsk is { } dsk)
+        if (toggle.Target == KeyTarget.Downstream)
         {
-            var on = state?.DskOnAir.GetValueOrDefault(dsk) ?? false;
-            _atem?.SetDskOnAir(dsk, !on);
-            return;
+            _atem?.SetDskOnAir(toggle.KeyIndex, toggle.On);
         }
-
-        var me = (key.Me ?? 1) - 1;
-        var keyer = key.Keyer ?? 0;
-        var keyOn = state?.KeyOnAir.TryGetValue(me, out var keys) == true && keys.GetValueOrDefault(keyer);
-        _atem?.SetKeyOnAir(keyer, !keyOn, me);
+        else
+        {
+            _atem?.SetKeyOnAir(toggle.KeyIndex, toggle.On, toggle.Me);
+        }
     }
 
     private static TextBlock Heading(string text) => new()

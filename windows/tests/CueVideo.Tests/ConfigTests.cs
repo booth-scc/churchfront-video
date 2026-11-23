@@ -34,7 +34,7 @@ public sealed class ConfigTests : IDisposable
               "macOnlyField": { "a": 1 }
             }
           ],
-          "keys": [ { "label": "KEY 1", "me": 1, "keyer": 0 } ],
+          "keys": [ { "label": "KEY 1", "me": 1, "keyer": 1 } ],
           "trackSpeed": 1.4,
           "unknownRoot": "keep me"
         }

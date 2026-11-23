@@ -82,10 +82,10 @@ public sealed class CueConfig
         ],
         Keys =
         [
-            new KeyButtonConfig { Label = "KEY 1", Me = 1, Keyer = 0 },
-            new KeyButtonConfig { Label = "KEY 2", Me = 1, Keyer = 1 },
-            new KeyButtonConfig { Label = "KEY 3", Me = 1, Keyer = 2 },
-            new KeyButtonConfig { Label = "KEY 4", Me = 1, Keyer = 3 },
+            new KeyButtonConfig { Label = "KEY 1", Me = 1, Keyer = 1 },
+            new KeyButtonConfig { Label = "KEY 2", Me = 1, Keyer = 2 },
+            new KeyButtonConfig { Label = "KEY 3", Me = 1, Keyer = 3 },
+            new KeyButtonConfig { Label = "KEY 4", Me = 1, Keyer = 4 },
         ],
     };
 
@@ -164,12 +164,15 @@ public sealed class KeyButtonConfig
     [JsonPropertyName("label")]
     public string Label { get; set; } = "KEY";
 
+    /// <summary>The M/E, counted from 1 as on the switcher.</summary>
     [JsonPropertyName("me")]
     public int? Me { get; set; }
 
+    /// <summary>The upstream keyer, counted from 1 as on the switcher.</summary>
     [JsonPropertyName("keyer")]
     public int? Keyer { get; set; }
 
+    /// <summary>The downstream key, counted from 1 as on the switcher.</summary>
     [JsonPropertyName("dsk")]
     public int? Dsk { get; set; }
 
