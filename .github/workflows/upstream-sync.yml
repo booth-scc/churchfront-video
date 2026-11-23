@@ -1,0 +1,41 @@
+name: Upstream macOS check
+
+on:
+  push:
+    paths:
+      - "Sources/**"
+      - "Tests/**"
+      - "Package.swift"
+      - "Package.resolved"
+      - "build.sh"
+      - "Tools/**"
+      - ".github/workflows/upstream-sync.yml"
+  pull_request:
+    paths:
+      - "Sources/**"
+      - "Tests/**"
+      - "Package.swift"
+      - "Package.resolved"
+      - "build.sh"
+      - "Tools/**"
+      - ".github/workflows/upstream-sync.yml"
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  match-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/Churchfront/churchfront-video.git
+          git fetch upstream main
+      - name: Check macOS tree matches upstream
+        run: |
+          echo "This fork does not edit the macOS app; Sources, Tests and their tooling must match upstream/main."
+          git diff --exit-code upstream/main -- Sources Tests Package.swift Package.resolved build.sh Tools

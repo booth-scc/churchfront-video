@@ -16,6 +16,26 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: for implementation work, push first and confirm `git log origin/main..HEAD` is empty (or the PR is merged). Only close when the fix is visible on `origin/main`. Post the explanation with `gh issue comment <number> --body "..."`, then `gh issue close <number>`. On an already-closed issue, `gh issue close --comment` drops the comment and still exits 0.
 
+### Editing an issue body on Windows
+
+PowerShell 5.1 decodes native `gh` output with the console code page. Reading a body with `--jq` can collapse lines and corrupt non-ASCII characters. Set UTF-8 first, fetch the body as JSON, write it without a BOM, edit the file, then pass it back:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
+
+$body = (gh issue view <number> --json body | ConvertFrom-Json).body
+[System.IO.File]::WriteAllText(
+    "$env:TEMP\issue.md",
+    $body,
+    [System.Text.UTF8Encoding]::new($false))
+
+# Edit $env:TEMP\issue.md, then:
+gh issue edit <number> --body-file "$env:TEMP\issue.md"
+```
+
+Re-read the result before editing; a single-line body or a broken arrow means the encoding is wrong. Avoid complex `--jq` expressions when you will write the text back.
+
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
 File issues only into the user's own repo. Never file into `mattpocock/skills` (the repo these skills come from) unless the user owns it. In a fork, `gh` can default to the upstream parent, so before the first `gh issue create` of a session, check the target with `gh repo view --json nameWithOwner` and confirm it with the user if it is not their repo.

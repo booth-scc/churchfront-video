@@ -20,4 +20,4 @@ The five canonical roles use their default label strings. See `docs/agents/triag
 
 ### Coding standards
 
-Judgement calls for reviewers live in `CODING_STANDARDS.md`. Mechanical checks belong in `windows/check.ps1` or CI.
+Judgement calls for reviewers live in `CODING_STANDARDS.md`.

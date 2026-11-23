@@ -17,8 +17,3 @@ Review-time rules that need judgement. Mechanical rules belong in `windows/check
 - Test behaviour at a public seam; name tests as specifications.
 - A policy table can be one theory. Wiring still needs its own check.
 - Any shortcut, focus or dialog safety change needs either an Avalonia headless test or the manual checklist in `windows/README.md`.
-
-## Review
-
-- Report documented-standard breaches as violations; report the smell baseline as judgement calls.
-- Prefer a deterministic check over a written rule whenever the rule is mechanical.
