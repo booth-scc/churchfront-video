@@ -75,8 +75,8 @@ public partial class MainWindow : Window
         var command = OperatorKeyboard.Resolve(
             key,
             OperatorView.IsVisible ? MainScreen.Operator : MainScreen.Engineer,
-            OwnedWindows.Count > 0,
-            textFieldFocused);
+            dialogOpen: OwnedWindows.Count > 0,
+            textFieldFocused: textFieldFocused);
 
         var me = _config.Config.Me - 1;
 
