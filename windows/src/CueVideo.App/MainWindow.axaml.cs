@@ -30,12 +30,11 @@ public partial class MainWindow : Window
     private static readonly IBrush CardRaised = new SolidColorBrush(Color.Parse("#1A1C20"));
     private static readonly IBrush LineBrush = new SolidColorBrush(Color.Parse("#23252A"));
 
-    private readonly ConfigStore _config = new();
+    private readonly Booth _booth = new(new ConfigStore(), new AtemClient());
     private readonly List<SourceTile> _tiles = [];
     private readonly List<NdiView> _thumbs = [];
     private readonly Dictionary<int, ViscaIpLink> _links = [];
 
-    private AtemClient? _atem;
     private EngineerView? _engineerView;
     private NdiView? _liveView;
     private NdiView? _nextView;
@@ -51,6 +50,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         Loaded += OnLoaded;
         Closed += OnClosed;
+
+        _booth.Rendered += state => Dispatcher.UIThread.Post(() => ShowBooth(state));
 
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
     }
@@ -78,17 +79,15 @@ public partial class MainWindow : Window
             dialogOpen: OwnedWindows.Count > 0,
             textFieldFocused: textFieldFocused);
 
-        var me = SwitcherAddress.MeIndex(_config.Config.Me);
-
         switch (command)
         {
             case OperatorCommand.Cut:
-                _atem?.Cut(me);
+                _booth.Cut();
                 e.Handled = true;
                 break;
 
             case OperatorCommand.Fade:
-                _atem?.Auto(me);
+                _booth.Auto();
                 e.Handled = true;
                 break;
         }
@@ -96,10 +95,10 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object? sender, EventArgs e)
     {
-        _config.Load();
+        _booth.Load();
 
         var host = Environment.GetEnvironmentVariable("CUEVIDEO_ATEM");
-        if (string.IsNullOrWhiteSpace(host)) host = _config.Config.AtemHost;
+        if (string.IsNullOrWhiteSpace(host)) host = _booth.Config.AtemHost;
 
         BuildSourceTiles();
         WireTransport();
@@ -107,14 +106,10 @@ public partial class MainWindow : Window
         WireSpeed();
         UpdateCameraProtocolNotice();
 
-        _atem = new AtemClient();
-        _atem.LinkChanged += link => Dispatcher.UIThread.Post(() => ShowLink(link));
-        _atem.StateChanged += state => Dispatcher.UIThread.Post(() => ShowState(state));
-        _atem.Connect(host);
+        _booth.Connect(host ?? "");
 
         AttachLive();
-
-        StatusText.Text = _config.FileError ?? $"Connecting to {host}…";
+        ShowBooth(_booth.Render());
 
         if (Environment.GetCommandLineArgs().Any(a => a.Equals("--engineer", StringComparison.OrdinalIgnoreCase)))
         {
@@ -138,8 +133,7 @@ public partial class MainWindow : Window
         _engineerView?.Dispose();
         _engineerView = null;
 
-        _atem?.Dispose();
-        _atem = null;
+        _booth.Dispose();
     }
 
     // ---- Switcher ----
@@ -149,12 +143,7 @@ public partial class MainWindow : Window
         SourceTiles.Children.Clear();
         _tiles.Clear();
 
-        var sources = _config.Config.Sources.Count > 0
-            ? _config.Config.Sources
-            : _config.Config.Cameras
-                .Where(c => c.AtemInput is not null)
-                .Select(c => new VolunteerSource { Input = c.AtemInput!.Value, Label = c.Name })
-                .ToList();
+        var sources = _booth.Sources;
 
         foreach (var source in sources)
         {
@@ -162,7 +151,7 @@ public partial class MainWindow : Window
 
             var host = new Border { Background = new SolidColorBrush(Color.Parse("#0D0E11")), CornerRadius = new CornerRadius(5) };
 
-            var ndi = _config.Config.Pictures.TryGetValue(source.Input.ToString(), out var picture) ? picture : source.Ndi;
+            var ndi = _booth.PictureFor(source.Input) ?? source.Ndi;
             if (!string.IsNullOrWhiteSpace(ndi))
             {
                 var thumb = new NdiView(ndi, "", lowestBandwidth: true);
@@ -206,7 +195,7 @@ public partial class MainWindow : Window
             };
 
             var input = source.Input;
-            tile.PointerPressed += (_, _) => _atem?.SetPreview(input);
+            tile.PointerPressed += (_, _) => _booth.SetPreview(input);
 
             _tiles.Add(new SourceTile(input, tile, badge, badgeText));
             SourceTiles.Children.Add(tile);
@@ -217,11 +206,9 @@ public partial class MainWindow : Window
 
     private void WireTransport()
     {
-        var me = SwitcherAddress.MeIndex(_config.Config.Me);
-
-        CutButton.Click += (_, _) => _atem?.Cut(me);
-        AutoButton.Click += (_, _) => _atem?.Auto(me);
-        BlackButton.Click += (_, _) => _atem?.FadeToBlack(me);
+        CutButton.Click += (_, _) => _booth.Cut();
+        AutoButton.Click += (_, _) => _booth.Auto();
+        BlackButton.Click += (_, _) => _booth.FadeToBlack();
         MoreButton.Click += (_, _) => OpenMore();
         EngineerButton.Click += (_, _) => OpenEngineer();
         OperatorButton.Click += (_, _) => ShowOperator();
@@ -229,7 +216,7 @@ public partial class MainWindow : Window
 
     private void OpenEngineer()
     {
-        _engineerView ??= new EngineerView(_config, ReloadConfig);
+        _engineerView ??= new EngineerView(_booth.Store, ReloadConfig);
         EngineerHost.Content = _engineerView;
 
         OperatorView.IsVisible = false;
@@ -263,11 +250,10 @@ public partial class MainWindow : Window
 
         BuildSourceTiles();
 
-        var host = _config.Config.AtemHost;
-        if (_atem is not null && host.Length > 0 &&
-            !string.Equals(_atem.Host, host, StringComparison.OrdinalIgnoreCase))
+        var host = _booth.Config.AtemHost;
+        if (host.Length > 0 && !string.Equals(_booth.Host, host, StringComparison.OrdinalIgnoreCase))
         {
-            _atem.Connect(host);
+            _booth.Connect(host);
         }
 
         _liveNdiName = null;
@@ -277,6 +263,9 @@ public partial class MainWindow : Window
         UpdateCameraProtocolNotice();
         BuildShots();
         _ = ShowExposureAsync();
+
+        // The rebuilt tiles must take their tally and status from the same snapshot.
+        ShowBooth(_booth.Render());
     }
 
     private void WireSpeed()
@@ -338,7 +327,7 @@ public partial class MainWindow : Window
 
     private ViscaIpLink? LinkFor(int input)
     {
-        var camera = _config.Config.CameraForInput(input);
+        var camera = _booth.Config.CameraForInput(input);
         if (camera is null || !camera.IsSupported) return null;
 
         if (_links.TryGetValue(input, out var existing)) return existing;
@@ -350,7 +339,7 @@ public partial class MainWindow : Window
 
     private void UpdateCameraProtocolNotice()
     {
-        var camera = _config.Config.CameraForInput(_nextInput);
+        var camera = _booth.Config.CameraForInput(_nextInput);
         var unsupported = camera is { IsSupported: false };
 
         CameraProtocolNotice.IsVisible = unsupported;
@@ -362,7 +351,7 @@ public partial class MainWindow : Window
     /// <summary>Why the camera on Next cannot be driven, for buttons that would otherwise lie.</summary>
     private string CannotDriveReason()
     {
-        var camera = _config.Config.CameraForInput(_nextInput);
+        var camera = _booth.Config.CameraForInput(_nextInput);
         if (camera is null) return "No camera on Next.";
         if (!camera.IsSupported) return $"{camera.Name} · {camera.ProtocolLabel} unsupported by this port.";
         return $"{camera.Name} has no address.";
@@ -372,7 +361,7 @@ public partial class MainWindow : Window
     {
         ShotRows.Children.Clear();
 
-        foreach (var camera in _config.Config.Cameras)
+        foreach (var camera in _booth.Config.Cameras)
         {
             if (camera.AtemInput is not { } input) continue;
 
@@ -401,7 +390,7 @@ public partial class MainWindow : Window
 
             if (!camera.IsSupported) ToolTip.SetTip(cameraButton, $"{camera.ProtocolLabel} unsupported by this port");
 
-            cameraButton.Click += (_, _) => _atem?.SetPreview(input);
+            cameraButton.Click += (_, _) => _booth.SetPreview(input);
 
             row.Children.Add(cameraButton);
 
@@ -436,7 +425,7 @@ public partial class MainWindow : Window
 
     private async Task ShowExposureAsync()
     {
-        var camera = _config.Config.CameraForInput(_nextInput);
+        var camera = _booth.Config.CameraForInput(_nextInput);
         ExposureCamText.Text = camera is null
             ? "No camera on Next"
             : camera.IsSupported
@@ -478,7 +467,7 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrWhiteSpace(source))
         {
-            source = _config.Config.Pictures.TryGetValue(program.ToString(), out var picture) ? picture : null;
+            source = _booth.PictureFor(program);
         }
 
         if (string.Equals(source, _liveNdiName, StringComparison.OrdinalIgnoreCase)) return;
@@ -504,12 +493,7 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrWhiteSpace(source))
         {
-            source = _config.Config.Pictures.TryGetValue(_nextInput.ToString(), out var picture) ? picture : null;
-        }
-
-        if (string.IsNullOrWhiteSpace(source))
-        {
-            source = _config.Config.Sources.FirstOrDefault(s => s.Input == _nextInput)?.Ndi;
+            source = _booth.NdiFor(_nextInput);
         }
 
         if (string.Equals(source, _nextNdiName, StringComparison.OrdinalIgnoreCase)) return;
@@ -531,41 +515,32 @@ public partial class MainWindow : Window
 
     // ---- State ----
 
-    private void ShowLink(AtemLink link)
+    /// <summary>
+    /// The Operator screen's one render path: program, preview, tally, status and the
+    /// transition labels all come from the same Booth snapshot.
+    /// </summary>
+    private void ShowBooth(BoothSnapshot state)
     {
-        (StatusDot.Fill, StatusText.Text) = link.State switch
-        {
-            AtemLinkState.Online => (OnlineBrush, "Ready"),
-            AtemLinkState.Connecting => (ConnectingBrush, "Connecting…"),
-            AtemLinkState.Offline => (OfflineBrush, "Switcher offline"),
-            _ => (ConnectingBrush, "Starting…"),
-        };
-    }
+        ProgramSource.Text = state.ProgramLabel;
+        NextSource.Text = state.PreviewLabel;
 
-    private void ShowState(AtemState state)
-    {
-        ProgramSource.Text = state.Name(state.Program.GetValueOrDefault(0));
-        NextSource.Text = state.Name(state.Preview.GetValueOrDefault(0));
-
-        var program = state.Program.GetValueOrDefault(0);
-        var preview = state.Preview.GetValueOrDefault(0);
-
-        var changed = preview != _nextInput || !_initialised;
-        var programChanged = program != _programInput || !_initialised;
+        var previewChanged = state.PreviewInput != _nextInput || !_initialised;
+        var programChanged = state.ProgramInput != _programInput || !_initialised;
 
         _initialised = true;
-        _nextInput = preview;
-        _programInput = program;
+        _nextInput = state.PreviewInput;
+        _programInput = state.ProgramInput;
 
-        UpdateTally(state);
-        UpdateSwitcherLabels(state);
+        ShowTally(state);
+        ShowSwitcherLabels(state);
+        ShowStatus(state.Status);
 
-        if (programChanged) UpdateLiveTile(program);
+        if (programChanged) UpdateLiveTile(state.ProgramInput);
 
-        if (!changed) return;
+        if (!previewChanged) return;
 
-        var camera = _config.Config.CameraForInput(_nextInput);
-        CameraChipName.Text = camera?.Name ?? state.Name(_nextInput);
+        var camera = _booth.Config.CameraForInput(_nextInput);
+        CameraChipName.Text = camera?.Name ?? state.PreviewLabel;
         UpdateCameraProtocolNotice();
 
         BuildShots();
@@ -573,39 +548,34 @@ public partial class MainWindow : Window
         _ = ShowExposureAsync();
     }
 
-    private void UpdateTally(AtemState state)
+    private void ShowTally(BoothSnapshot state)
     {
         foreach (var tile in _tiles)
         {
-            byte bits;
-            if (state.Tally.TryGetValue(tile.Input, out var bit))
-            {
-                bits = bit;
-            }
-            else
-            {
-                bits = (byte)((state.Program.Values.Contains(tile.Input) ? 1 : 0) | (state.Preview.Values.Contains(tile.Input) ? 2 : 0));
-            }
+            var tally = state.TallyFor(tile.Input);
 
-            var isProgram = (bits & 1) != 0;
-            var isPreview = (bits & 2) != 0;
-
-            tile.Border.BorderBrush = isProgram ? TileProgram : isPreview ? TilePreview : TileIdleBorder;
-            tile.Badge.IsVisible = isProgram || isPreview;
-            tile.Badge.Background = isProgram ? TileProgram : TilePreview;
-            tile.BadgeText.Text = isProgram ? "LIVE" : "NEXT";
+            tile.Border.BorderBrush = tally.Live ? TileProgram : tally.Next ? TilePreview : TileIdleBorder;
+            tile.Badge.IsVisible = tally.Live || tally.Next;
+            tile.Badge.Background = tally.Live ? TileProgram : TilePreview;
+            tile.BadgeText.Text = tally.Live ? "LIVE" : "NEXT";
         }
     }
 
-    private void UpdateSwitcherLabels(AtemState state)
+    private void ShowSwitcherLabels(BoothSnapshot state)
     {
-        var inTransition = state.InTransition.GetValueOrDefault(0);
-        var frames = state.MixRate.GetValueOrDefault(0);
-        var seconds = frames > 0 ? frames / 30.0 : 1.0;
+        FadeSub.Text = $"{state.FadeSeconds:0.0} s · Return";
+        BlackSub.Text = state.Black ? "On" : "Off";
+        AutoButton.Opacity = state.InTransition ? 0.75 : 1.0;
+    }
 
-        FadeSub.Text = $"{seconds:0.0} s · Return";
-        BlackSub.Text = state.FtbBlack.GetValueOrDefault(0) ? "On" : "Off";
-        AutoButton.Opacity = inTransition ? 0.75 : 1.0;
+    private void ShowStatus(BoothStatus status)
+    {
+        (StatusDot.Fill, StatusText.Text) = status.Tone switch
+        {
+            BoothStatusTone.Ready => (OnlineBrush, status.Text),
+            BoothStatusTone.Offline => (OfflineBrush, status.Text),
+            _ => (ConnectingBrush, status.Text),
+        };
     }
 
     // ---- More ----
@@ -639,7 +609,7 @@ public partial class MainWindow : Window
 
         panel.Children.Add(Heading("KEYS"));
         var keys = new UniformGrid { Columns = 2 };
-        foreach (var key in _config.Config.Keys)
+        foreach (var key in _booth.Config.Keys)
         {
             var button = new Button
             {
@@ -742,19 +712,7 @@ public partial class MainWindow : Window
         dialog.ShowDialog(this);
     }
 
-    private void ToggleKey(KeyButtonConfig key)
-    {
-        if (key.Toggle(_atem?.State) is not { } toggle) return;
-
-        if (toggle.Target == KeyTarget.Downstream)
-        {
-            _atem?.SetDskOnAir(toggle.KeyIndex, toggle.On);
-        }
-        else
-        {
-            _atem?.SetKeyOnAir(toggle.KeyIndex, toggle.On, toggle.Me);
-        }
-    }
+    private void ToggleKey(KeyButtonConfig key) => _booth.Toggle(key);
 
     private static TextBlock Heading(string text) => new()
     {

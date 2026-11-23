@@ -21,7 +21,7 @@ public sealed record AtemCommandLog(DateTime Time, string Command, byte[] Data, 
 /// acknowledgements, retransmission and de-duplication so a late packet can
 /// never overwrite a newer one.
 /// </summary>
-public sealed class AtemClient : IDisposable
+public sealed class AtemClient : ISwitcher
 {
     private sealed class InFlight
     {

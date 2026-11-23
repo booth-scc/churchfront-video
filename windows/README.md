@@ -4,7 +4,7 @@ C#/.NET port of the macOS SwiftUI app in `../Sources`, aimed at the booth's Wind
 
 ## Status
 
-Phase 0/1 in progress. ATEM control and NDI send/receive work end to end, VISCA over IP (UDP 52381) is implemented with a fake-camera test suite, and the operator screen mirrors the macOS layout: NEXT and LIVE on top, a centred strip of live source thumbnails, and one bottom bar with the camera chip, exposure, per-camera shots, framing pad, and FADE / CUT / BLACK / LOWER THIRDS. An Engineer view (same window, toggled from the header) maps NDI feeds to inputs, edits cameras and tests VISCA replies. Settings persistence and the tracker are still to come.
+Phase 0/1 in progress. ATEM control and NDI send/receive work end to end, VISCA over IP (UDP 52381) is implemented with a fake-camera test suite, and the operator screen mirrors the macOS layout: NEXT and LIVE on top, a centred strip of live source thumbnails, and one bottom bar with the camera chip, exposure, per-camera shots, framing pad, and FADE / CUT / BLACK / LOWER THIRDS. The operator screen renders program, preview, tally and status from one `Booth` snapshot in Core, so the window is only an adapter. An Engineer view (same window, toggled from the header) maps NDI feeds to inputs, edits cameras and tests VISCA replies. Settings persistence and the tracker are still to come.
 
 ## Engineer view
 
@@ -118,7 +118,7 @@ Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; th
 | `src/CueVideo.Visca` | VISCA-IP 52381, units/calibration (raw TCP is not ported) | `Sources/CueATEM/PTZ.swift` (VISCALink, ViscaUnits) |
 | `src/CueVideo.Ndi` | P/Invoke to the NDI runtime, receive + discovery | `Sources/NDIBridge`, `NDIFeed.swift` |
 | `src/CueVideo.Vision` | ONNX Runtime DirectML pose/identity | `Tracker.swift`, `Identity.swift` |
-| `src/CueVideo.Core` | Config, orchestration, tracking, stage scan | `Config.swift`, `StageScan.swift`, `ControlServer.swift` |
+| `src/CueVideo.Core` | Booth (config + switcher state + one render snapshot), config, orchestration, tracking, stage scan | `Config.swift`, `App.swift` (Booth), `StageScan.swift`, `ControlServer.swift` |
 | `src/CueVideo.App` | Avalonia operator UI | `VolunteerView.swift` and friends |
 | `src/CueVideo.Spike` | Phase 0 doctor and gate harness | `Tools/fake_atem.py` + `SelfTest.swift` |
 | `tests/CueVideo.Tests` | Unit tests | `Tests/` |
