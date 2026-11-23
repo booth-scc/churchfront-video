@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using CueVideo.Core;
 
@@ -45,7 +46,7 @@ public sealed class ConfigTests : IDisposable
         }
         """);
 
-        var store = new ConfigStore(_directory);
+        using var store = new ConfigStore(_directory, readOnly: false);
         store.Load();
 
         Assert.Null(store.FileError);
@@ -77,7 +78,7 @@ public sealed class ConfigTests : IDisposable
         var written = File.ReadAllText(store.Path);
         Assert.DoesNotContain("EffectivePort", written);
 
-        var again = new ConfigStore(_directory);
+        using var again = new ConfigStore(_directory, readOnly: false);
         again.Load();
 
         Assert.True(again.Config.Extra!.ContainsKey("unknownRoot"));
@@ -91,7 +92,7 @@ public sealed class ConfigTests : IDisposable
     [Fact]
     public void CreatesDefaultsWhenThereIsNoFile()
     {
-        var store = new ConfigStore(_directory);
+        using var store = new ConfigStore(_directory, readOnly: false);
         store.Load();
 
         Assert.True(store.CreatedDefaults);
@@ -105,18 +106,156 @@ public sealed class ConfigTests : IDisposable
     public void FallsBackToLastGoodWhenTheFileIsBroken()
     {
         Directory.CreateDirectory(_directory);
-        var store = new ConfigStore(_directory);
-        store.Load();               // writes defaults and last-good
-        var good = store.Config;
 
-        File.WriteAllText(store.Path, "{ this is not json");
+        using (var store = new ConfigStore(_directory, readOnly: false))
+        {
+            store.Load();               // writes defaults and last-good
+        }
 
-        var next = new ConfigStore(_directory);
+        var good = File.ReadAllText(Path.Combine(_directory, "config.last-good.json"));
+
+        File.WriteAllText(Path.Combine(_directory, "config.json"), "{ this is not json");
+
+        using var next = new ConfigStore(_directory, readOnly: false);
         next.Load();
 
         Assert.True(next.UsedLastGood);
         Assert.NotNull(next.FileError);
-        Assert.Equal(good.AtemHost, next.Config.AtemHost);
+        Assert.Equal("192.168.10.159", next.Config.AtemHost);
         Assert.Equal(4, next.Config.Cameras.Count);
+        Assert.Equal(good, File.ReadAllText(Path.Combine(_directory, "config.last-good.json")));
+    }
+
+    [Fact]
+    public async Task AnExternalEditReachesTheStoreWithinASecond()
+    {
+        Directory.CreateDirectory(_directory);
+        var path = Path.Combine(_directory, "config.json");
+        File.WriteAllText(path, """{ "atemHost": "192.168.10.159" }""");
+
+        using var store = new ConfigStore(_directory, readOnly: false);
+        store.Load();
+
+        var reloaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        store.Changed += () => reloaded.TrySetResult();
+
+        var started = Stopwatch.StartNew();
+        File.WriteAllText(path, """{ "atemHost": "10.9.8.7" }""");
+
+        await reloaded.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(started.Elapsed < TimeSpan.FromSeconds(1), $"the change took {started.Elapsed}.");
+        Assert.Equal("10.9.8.7", store.Config.AtemHost);
+        Assert.Null(store.FileError);
+    }
+
+    [Fact]
+    public async Task ATransientReadFailureIsRetriedWithoutArchivingTheFile()
+    {
+        Directory.CreateDirectory(_directory);
+        var path = Path.Combine(_directory, "config.json");
+        File.WriteAllText(path, """{ "atemHost": "192.168.10.159" }""");
+
+        using var store = new ConfigStore(_directory, readOnly: false);
+        store.Load();
+
+        // A file that cannot be read for a moment must not be treated as a broken setup.
+        File.Delete(path);
+        Directory.CreateDirectory(path);
+        await WaitUntil(() => store.FileError is not null);
+
+        Directory.Delete(path);
+
+        var reloaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        store.Changed += () => { if (store.FileError is null) reloaded.TrySetResult(); };
+
+        File.WriteAllText(path, """{ "atemHost": "10.9.8.7" }""");
+        await reloaded.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal("10.9.8.7", store.Config.AtemHost);
+        Assert.Empty(Directory.GetFiles(_directory, "config.unreadable-*.json"));
+
+        store.Update(config => config.AtemHost = "10.9.8.8");
+        Assert.Empty(Directory.GetFiles(_directory, "config.unreadable-*.json"));
+    }
+
+    [Fact]
+    public void ReadOnlyRunsNeverWrite()
+    {
+        using var store = new ConfigStore(_directory, readOnly: true);
+        store.Load();
+
+        Assert.True(store.CreatedDefaults);
+        Assert.False(File.Exists(store.Path));
+        Assert.False(File.Exists(store.LastGoodPath));
+
+        store.Update(config => config.AtemHost = "10.0.0.5");
+
+        Assert.Equal("10.0.0.5", store.Config.AtemHost);
+        Assert.False(File.Exists(store.Path));
+        Assert.False(File.Exists(store.LastGoodPath));
+    }
+
+    [Fact]
+    public async Task ARepairedFileRaisesEvenWhenTheSetupDidNotChange()
+    {
+        Directory.CreateDirectory(_directory);
+        var path = Path.Combine(_directory, "config.json");
+        File.WriteAllText(path, """{ "atemHost": "10.1.1.1" }""");
+
+        using var store = new ConfigStore(_directory, readOnly: true);
+        store.Load();
+
+        File.WriteAllText(path, "{ this is not json");
+        await WaitUntil(() => store.FileError is not null);
+
+        var cleared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        store.Changed += () => { if (store.FileError is null) cleared.TrySetResult(); };
+
+        // The same setup as the one already loaded: only the error state changes.
+        File.WriteAllText(path, """{ "atemHost": "10.1.1.1" }""");
+        await cleared.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Null(store.FileError);
+    }
+
+    [Fact]
+    public void SelfTestRunsAreReadOnly()
+    {
+        Assert.True(ConfigStore.IsSelfTestRun(["CUEVIDEO_ATEM"]));
+        Assert.True(ConfigStore.IsSelfTestRun(["CUEVIDEO_CONFIG_DIR"]));
+        Assert.False(ConfigStore.IsSelfTestRun(["PATH", "USERNAME"]));
+    }
+
+    [Fact]
+    public void AnUnreadableFileIsKeptWhenTheNextSaveReplacesIt()
+    {
+        Directory.CreateDirectory(_directory);
+        var path = Path.Combine(_directory, "config.json");
+        File.WriteAllText(path, "{ this is not json");
+
+        using var store = new ConfigStore(_directory, readOnly: false);
+        store.Load();
+
+        Assert.NotNull(store.FileError);
+        Assert.Equal("{ this is not json", File.ReadAllText(path));     // never overwritten on load
+
+        store.Update(config => config.AtemHost = "10.0.0.5");
+
+        Assert.Null(store.FileError);
+        var aside = Assert.Single(Directory.GetFiles(_directory, "config.unreadable-*.json"));
+        Assert.Equal("{ this is not json", File.ReadAllText(aside));
+
+        using var next = new ConfigStore(_directory, readOnly: false);
+        next.Load();
+        Assert.Equal("10.0.0.5", next.Config.AtemHost);
+    }
+
+    private static async Task WaitUntil(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!condition() && DateTime.UtcNow < deadline) await Task.Delay(25);
+
+        Assert.True(condition());
     }
 }

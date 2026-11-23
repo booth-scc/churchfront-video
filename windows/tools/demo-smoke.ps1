@@ -29,6 +29,8 @@ function Pass([string]$text) { Write-Host "ok   $text" }
 
 $crashBefore = if (Test-Path $crash) { (Get-Item $crash).LastWriteTime } else { $null }
 $existingSpike = @(Get-Process CueVideo.Spike -ErrorAction SilentlyContinue | ForEach-Object Id)
+$configPath = Join-Path $env:APPDATA 'CueVideo\demo\config.json'
+$originalConfig = $null
 $wrapper = Start-Process powershell -ArgumentList @(
     '-ExecutionPolicy', 'Bypass', '-File', "`"$demo`"", '-Build') -PassThru -WindowStyle Hidden
 $app = $null
@@ -84,6 +86,25 @@ try {
     if ($gain -in $unknown) { throw "Exposure did not fill: '$gain'." }
     Pass "exposure read $gain"
 
+    # A hand edit to config.json must reach the screen without a restart.
+    $originalConfig = [System.IO.File]::ReadAllText($configPath)
+    $editedConfig = $originalConfig.Replace('"label": "PRES MAIN"', '"label": "PRES EDITED"')
+    if ($editedConfig -eq $originalConfig) { throw 'The demo config has no PRES MAIN label to edit.' }
+
+    [System.IO.File]::WriteAllText($configPath, $editedConfig, [System.Text.UTF8Encoding]::new($false))
+
+    $edited = $null
+    $deadline = (Get-Date).AddSeconds(3)
+    while (-not $edited -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 200
+        $edited = $window.FindFirst(
+            [System.Windows.Automation.TreeScope]::Descendants,
+            (New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::NameProperty, 'PRES EDITED')))
+    }
+    if (-not $edited) { throw 'A hand edit to config.json did not reach the screen.' }
+    Pass 'config reload'
+
     Invoke-Control 'ZoomInButton'; Pass 'zoom in'
     Invoke-Control 'FocusButton'; Pass 'focus'
     Invoke-Control 'ExposureAutoButton'
@@ -130,6 +151,9 @@ try {
     Write-Host "fail $($_.Exception.Message)"
 } finally {
     Get-Process CueVideo.App -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    if ($originalConfig) {
+        try { [System.IO.File]::WriteAllText($configPath, $originalConfig, [System.Text.UTF8Encoding]::new($false)) } catch { }
+    }
     if ($wrapper -and -not $wrapper.HasExited) {
         try { $wrapper.WaitForExit(15000) | Out-Null } catch { }
     }

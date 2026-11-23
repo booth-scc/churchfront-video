@@ -7,7 +7,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using CueVideo.Atem;
 using CueVideo.Core;
 using CueVideo.Ndi;
 using CueVideo.Visca;
@@ -30,10 +29,10 @@ public partial class MainWindow : Window
     private static readonly IBrush CardRaised = new SolidColorBrush(Color.Parse("#1A1C20"));
     private static readonly IBrush LineBrush = new SolidColorBrush(Color.Parse("#23252A"));
 
-    private readonly Booth _booth = new(new ConfigStore(), new AtemClient());
     private readonly List<SourceTile> _tiles = [];
     private readonly List<NdiView> _thumbs = [];
 
+    private Booth _booth = null!;
     private EngineerView? _engineerView;
     private NdiView? _liveView;
     private NdiView? _nextView;
@@ -50,9 +49,19 @@ public partial class MainWindow : Window
         Loaded += OnLoaded;
         Closed += OnClosed;
 
-        _booth.Rendered += state => Dispatcher.UIThread.Post(() => ShowBooth(state));
-
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
+    }
+
+    /// <summary>The app's shared Booth, set by the composition root before the window opens.</summary>
+    public required Booth Booth
+    {
+        get => _booth;
+        init
+        {
+            _booth = value;
+            value.Rendered += state => Dispatcher.UIThread.Post(() => ShowBooth(state));
+            value.ConfigChanged += RebuildFromConfig;
+        }
     }
 
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
@@ -94,17 +103,12 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object? sender, EventArgs e)
     {
-        _booth.Load();
-
-        var host = Environment.GetEnvironmentVariable("CUEVIDEO_ATEM");
-        if (string.IsNullOrWhiteSpace(host)) host = _booth.Config.AtemHost;
+        _booth.Start();
 
         BuildSourceTiles();
         WireTransport();
         WireCameraPanel();
         WireSpeed();
-
-        _booth.Connect(host ?? "");
 
         AttachLive();
         ShowBooth(_booth.Render());
@@ -212,7 +216,7 @@ public partial class MainWindow : Window
 
     private void OpenEngineer()
     {
-        _engineerView ??= new EngineerView(_booth.Store, ReloadConfig);
+        _engineerView ??= new EngineerView(_booth);
         EngineerHost.Content = _engineerView;
 
         OperatorView.IsVisible = false;
@@ -235,20 +239,26 @@ public partial class MainWindow : Window
         EngineerButton.Foreground = InkDim;
     }
 
-    private void ReloadConfig()
+    /// <summary>
+    /// Rebuilds the controls that come from the setup after Booth applied a change, whether
+    /// the Engineer screen made it or someone edited config.json. Booth owns every reload
+    /// decision; the window only rebuilds what it renders.
+    /// </summary>
+    private void RebuildFromConfig()
     {
         foreach (var thumb in _thumbs) thumb.Dispose();
         _thumbs.Clear();
 
-        // A camera may have changed address or protocol; never keep driving the old one.
-        _booth.ReloadCameras();
-
         BuildSourceTiles();
 
-        var host = _booth.Config.AtemHost;
-        if (host.Length > 0 && !string.Equals(_booth.Host, host, StringComparison.OrdinalIgnoreCase))
+        // The Engineer rows hold the camera objects they were built from; a hand edit swaps
+        // in new ones, so build the view again rather than edit a setup nobody uses.
+        if (_engineerView is not null && !_engineerView.IsBuiltFrom(_booth.Config))
         {
-            _booth.Connect(host);
+            _engineerView.Dispose();
+            _engineerView = null;
+            EngineerHost.Content = null;
+            if (EngineerHost.IsVisible) OpenEngineer();
         }
 
         // The rebuilt tiles must take every part of the snapshot, including exposure.

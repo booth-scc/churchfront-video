@@ -21,19 +21,21 @@ public sealed class EngineerView : UserControl
     private static readonly IBrush Ok = new SolidColorBrush(Color.Parse("#6FCF7A"));
     private static readonly IBrush Bad = new SolidColorBrush(Color.Parse("#E0453A"));
 
-    private readonly ConfigStore _config;
-    private readonly Action _onSaved;
+    private readonly Booth _booth;
+    private readonly IReadOnlyList<PtzCameraConfig> _builtFromCameras;
     private readonly NdiFinder? _finder;
     private readonly ObservableCollection<string> _sources = [];
     private readonly List<(string Key, ComboBox Combo)> _feedCombos = [];
     private readonly TextBlock _scanStatus;
+    private readonly TextBlock _configStatus = new() { FontSize = 10, TextWrapping = TextWrapping.Wrap };
     private readonly StackPanel _cameraStatus = new() { Spacing = 4 };
     private readonly StackPanel _sourceList = new() { Spacing = 2 };
 
-    public EngineerView(ConfigStore config, Action onSaved)
+    public EngineerView(Booth booth)
     {
-        _config = config;
-        _onSaved = onSaved;
+        _booth = booth;
+        _builtFromCameras = booth.Config.Cameras.ToList();
+        booth.ConfigChanged += RefreshConfigStatus;
 
         try
         {
@@ -59,7 +61,30 @@ public sealed class EngineerView : UserControl
         AttachedToVisualTree += async (_, _) => await ScanAsync();
     }
 
-    public void Dispose() => _finder?.Dispose();
+    public void Dispose()
+    {
+        _booth.ConfigChanged -= RefreshConfigStatus;
+        _finder?.Dispose();
+    }
+
+    /// <summary>Says whether the last save reached the file, or why it could not.</summary>
+    private void RefreshConfigStatus()
+    {
+        var error = _booth.ConfigError;
+
+        _configStatus.Text = error
+            ?? (_booth.ReadOnly ? "Demo mode: edits reach the screen but are not saved to this file." : "");
+        _configStatus.Foreground = error is null ? Muted : Bad;
+        _configStatus.IsVisible = _configStatus.Text.Length > 0;
+    }
+
+    /// <summary>
+    /// True while the camera rows still point at the camera objects they were built from.
+    /// A hand edit swaps in a new setup, and the rows must be built again.
+    /// </summary>
+    public bool IsBuiltFrom(CueConfig config) =>
+        config.Cameras.Count == _builtFromCameras.Count &&
+        !config.Cameras.Where((camera, index) => !ReferenceEquals(camera, _builtFromCameras[index])).Any();
 
     private Control BuildSetup()
     {
@@ -86,12 +111,7 @@ public sealed class EngineerView : UserControl
         feeds.Children.Add(Cell(new TextBlock { Text = "INPUT", FontSize = 9, Foreground = Muted }, 0, 0));
         feeds.Children.Add(Cell(new TextBlock { Text = "NDI SOURCE", FontSize = 9, Foreground = Muted }, 1, 0));
 
-        var sources = _config.Config.Sources.Count > 0
-            ? _config.Config.Sources
-            : _config.Config.Cameras
-                .Where(c => c.AtemInput is not null)
-                .Select(c => new VolunteerSource { Input = c.AtemInput!.Value, Label = c.Name })
-                .ToList();
+        var sources = _booth.Sources;
 
         var row = 1;
         foreach (var source in sources)
@@ -114,23 +134,14 @@ public sealed class EngineerView : UserControl
             };
 
             var key = source.Input.ToString();
-            var current = _config.Config.Pictures.TryGetValue(key, out var picture) ? picture : "";
+            var current = _booth.Config.Pictures.TryGetValue(key, out var picture) ? picture : "";
             if (!string.IsNullOrWhiteSpace(current)) combo.SelectedItem = current;
 
             _feedCombos.Add((key, combo));
 
             combo.SelectionChanged += (_, _) =>
             {
-                if (combo.SelectedItem is not string selected || selected.Length == 0)
-                {
-                    _config.Config.Pictures.Remove(key);
-                }
-                else
-                {
-                    _config.Config.Pictures[key] = selected;
-                }
-
-                Save();
+                _booth.SetPicture(source.Input, combo.SelectedItem as string);
             };
 
             feeds.Children.Add(Cell(label, 0, row));
@@ -158,7 +169,7 @@ public sealed class EngineerView : UserControl
         }
 
         row = 1;
-        foreach (var camera in _config.Config.Cameras)
+        foreach (var camera in _booth.Config.Cameras)
         {
             cameras.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
@@ -168,22 +179,19 @@ public sealed class EngineerView : UserControl
             var input = new TextBox { Text = camera.AtemInput?.ToString() ?? "", FontSize = 11, Width = 70 };
             var preset = new TextBox { Text = camera.FirstPreset.ToString(), FontSize = 11, Width = 70 };
 
-            name.LostFocus += (_, _) => { camera.Name = name.Text ?? camera.Name; Save(); };
-            host.LostFocus += (_, _) => { camera.Host = host.Text ?? camera.Host; Save(); };
+            name.LostFocus += (_, _) => _booth.SetCameraName(camera.Id, name.Text ?? camera.Name);
+            host.LostFocus += (_, _) => _booth.SetCameraHost(camera.Id, host.Text ?? camera.Host);
             port.LostFocus += (_, _) =>
             {
-                if (int.TryParse(port.Text, out var value)) camera.Port = value;
-                Save();
+                if (int.TryParse(port.Text, out var value)) _booth.SetCameraPort(camera.Id, value);
             };
             input.LostFocus += (_, _) =>
             {
-                camera.AtemInput = int.TryParse(input.Text, out var value) ? value : null;
-                Save();
+                _booth.SetCameraInput(camera.Id, int.TryParse(input.Text, out var value) ? value : null);
             };
             preset.LostFocus += (_, _) =>
             {
-                if (int.TryParse(preset.Text, out var value)) camera.FirstPreset = value;
-                Save();
+                if (int.TryParse(preset.Text, out var value)) _booth.SetCameraFirstPreset(camera.Id, value);
             };
 
             var test = Ghost("Test");
@@ -227,18 +235,16 @@ public sealed class EngineerView : UserControl
 
         panel.Children.Add(Heading("SWITCHER"));
         var switcherRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        var atemHost = new TextBox { Text = _config.Config.AtemHost, FontSize = 11, Width = 200 };
+        var atemHost = new TextBox { Text = _booth.Config.AtemHost, FontSize = 11, Width = 200 };
         var saveAtem = Ghost("Save");
-        saveAtem.Click += (_, _) =>
-        {
-            _config.Config.AtemHost = atemHost.Text ?? "";
-            Save();
-        };
+        saveAtem.Click += (_, _) => _booth.SetSwitcherHost(atemHost.Text ?? "");
         switcherRow.Children.Add(atemHost);
         switcherRow.Children.Add(saveAtem);
         panel.Children.Add(switcherRow);
 
-        panel.Children.Add(Note($"Config file: {_config.Path}"));
+        panel.Children.Add(Note($"Config file: {_booth.ConfigPath}"));
+        panel.Children.Add(_configStatus);
+        RefreshConfigStatus();
 
         return new ScrollViewer { Content = panel };
     }
@@ -264,7 +270,7 @@ public sealed class EngineerView : UserControl
 
         panel.Children.Add(Heading("CAMERAS"));
 
-        var unsupported = _config.Config.UnsupportedCameras;
+        var unsupported = _booth.Config.UnsupportedCameras;
         if (unsupported.Count > 0)
         {
             panel.Children.Add(Note(
@@ -277,7 +283,7 @@ public sealed class EngineerView : UserControl
         testAll.Click += async (_, _) =>
         {
             results.Children.Clear();
-            foreach (var camera in _config.Config.Cameras)
+            foreach (var camera in _booth.Config.Cameras)
             {
                 var result = await ReadCameraAsync(camera);
                 results.Children.Add(new TextBlock
@@ -292,7 +298,7 @@ public sealed class EngineerView : UserControl
         panel.Children.Add(results);
 
         panel.Children.Add(Heading("SWITCHER"));
-        panel.Children.Add(Note(_config.Config.AtemHost));
+        panel.Children.Add(Note(_booth.Config.AtemHost));
 
         return new ScrollViewer { Content = panel };
     }
@@ -332,7 +338,7 @@ public sealed class EngineerView : UserControl
             _sources.Add(source.Name);
         }
 
-        foreach (var picture in _config.Config.Pictures.Values)
+        foreach (var picture in _booth.Config.Pictures.Values)
         {
             if (!string.IsNullOrWhiteSpace(picture) && seen.Add(picture.Trim())) _sources.Add(picture);
         }
@@ -341,7 +347,7 @@ public sealed class EngineerView : UserControl
 
         foreach (var (key, combo) in _feedCombos)
         {
-            if (!_config.Config.Pictures.TryGetValue(key, out var picture) || string.IsNullOrWhiteSpace(picture))
+            if (!_booth.Config.Pictures.TryGetValue(key, out var picture) || string.IsNullOrWhiteSpace(picture))
             {
                 continue;
             }
@@ -377,12 +383,6 @@ public sealed class EngineerView : UserControl
         {
             _sourceList.Children.Add(new TextBlock { Text = "• " + name, FontSize = 11, Foreground = Ink });
         }
-    }
-
-    private void Save()
-    {
-        _config.Save();
-        _onSaved();
     }
 
     private static string ShortName(string name)

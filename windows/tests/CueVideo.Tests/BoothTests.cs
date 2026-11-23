@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using CueVideo.Atem;
 using CueVideo.Core;
@@ -470,6 +471,93 @@ public sealed class BoothTests : IDisposable
         Assert.Equal("No answer from 192.168.10.159", booth.Render().Status.Text);
     }
 
+    [Fact]
+    public void EngineerEditsGoThroughTheBoothAndReachTheOperatorScreen()
+    {
+        using var booth = NewBooth(out var switcher);
+        var changes = 0;
+        booth.ConfigChanged += () => changes++;
+
+        var camera = booth.Config.CameraForInput(1)!;
+        booth.SetCameraHost(camera.Id, "192.168.10.200");
+        booth.SetPicture(2, "CueVideo CAM2");
+        booth.SetSwitcherHost("192.168.10.160");
+
+        Assert.Equal("192.168.10.200", booth.Config.CameraForInput(1)!.Host);
+        Assert.Equal("CueVideo CAM2", booth.PictureFor(2));
+        Assert.Equal("192.168.10.160", booth.Config.AtemHost);
+        Assert.Equal("192.168.10.160", switcher.Host);
+        Assert.Equal(3, changes);
+    }
+
+    [Fact]
+    public void EngineerEditsAreWrittenToTheFile()
+    {
+        using var booth = NewBooth(out _);
+
+        booth.SetPicture(5, "CueVideo CAM5");
+
+        using var saved = new ConfigStore(_directory, readOnly: false);
+        saved.Load();
+        Assert.Equal("CueVideo CAM5", saved.Config.Pictures["5"]);
+    }
+
+    [Fact]
+    public async Task AnExternalConfigEditReachesTheOperatorScreen()
+    {
+        using var booth = NewBooth(out var switcher);
+        var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        booth.ConfigChanged += () => changed.TrySetResult();
+
+        var state = new AtemState();
+        state.Preview[0] = 3;
+        switcher.Push(state);
+
+        File.WriteAllText(Path.Combine(_directory, "config.json"), """
+        {
+          "atemHost": "192.168.10.159",
+          "cameras": [ { "name": "Cam-New", "host": "192.168.10.77", "atemInput": 3 } ]
+        }
+        """);
+
+        await changed.Task.WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal("Cam-New", booth.Render().CameraOnNext?.Name);
+    }
+
+    [Fact]
+    public async Task AHandEditIsAppliedOnThePostingThread()
+    {
+        var store = new ConfigStore(_directory, readOnly: false);
+        store.Load();
+        var switcher = new FakeSwitcher();
+        var posted = new ConcurrentQueue<Action>();
+        using var booth = new Booth(store, switcher, posted.Enqueue);
+
+        File.WriteAllText(Path.Combine(_directory, "config.json"), """{ "atemHost": "192.168.10.160" }""");
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!posted.TryPeek(out _) && DateTime.UtcNow < deadline) await Task.Delay(25);
+
+        Assert.True(posted.TryDequeue(out var apply), "the setup change was not posted to the UI thread.");
+        Assert.Equal("", switcher.Host);                  // the poll thread touched nothing
+        apply();
+        Assert.Equal("192.168.10.160", switcher.Host);
+    }
+
+    [Fact]
+    public void ADemoRunAppliesEditsWithoutWritingTheFile()
+    {
+        var store = new ConfigStore(_directory, readOnly: true);
+        store.Load();
+        using var booth = new Booth(store, new FakeSwitcher());
+
+        booth.SetPicture(2, "CueVideo CAM2");
+
+        Assert.Equal("CueVideo CAM2", booth.PictureFor(2));
+        Assert.False(File.Exists(store.Path));
+    }
+
     private static async Task WaitFor(FakeViscaCamera camera, byte[] command)
     {
         var deadline = DateTime.UtcNow.AddSeconds(2);
@@ -485,7 +573,7 @@ public sealed class BoothTests : IDisposable
     /// </summary>
     private Booth NewBooth(out FakeSwitcher switcher)
     {
-        var store = new ConfigStore(_directory);
+        var store = new ConfigStore(_directory, readOnly: false);
         store.Load();
         switcher = new FakeSwitcher();
         return new Booth(store, switcher);

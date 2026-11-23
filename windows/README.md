@@ -21,7 +21,7 @@ To check the protocol gate by hand, add a camera with `"proto": "canonXC"` and a
 - Put that camera on Next: the operator chip shows the notice under it.
 - Open the gear dialog and press Save 20 / Go 20: the status line says the camera is unsupported and no preset is written.
 
-Every edit is written straight to `config.json`, and the operator window reloads its tiles and feeds without restarting.
+Every edit goes through the Booth, which writes `config.json` and tells the window what to rebuild; edits to the file by hand are picked up within a second. In a demo run (any `CUEVIDEO_` setting) edits reach the screen but are not written back.
 
 ## Operator shortcuts and saving
 
@@ -83,7 +83,7 @@ Requires Inno Setup 6: `winget install JRSoftware.InnoSetup`.
 
 It refuses to start while OBS or Churchfront Video is already running, so a demo cannot stop a service or the installed app. Pass `-Force` to stop the app and continue. Pass `-Build` to run the freshly built Debug app instead of `dist\publish`.
 
-`windows\tools\demo-smoke.ps1` is the non-interactive check for the operator screen: it starts the demo with the Debug build, reads the exposure rows, invokes zoom, focus, a shot-row preset and auto exposure, holds the joystick, checks the app stayed up with no crash log, then tears the demo down. Run it after changing camera wiring:
+`windows\tools\demo-smoke.ps1` is the non-interactive check for the operator screen: it starts the demo with the Debug build, reads the exposure rows, edits the demo config to check the live reload, invokes zoom, focus, a shot-row preset and auto exposure, holds the joystick, checks the app stayed up with no crash log, then tears the demo down. Run it after changing camera or config wiring:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File windows\tools\demo-smoke.ps1
@@ -100,7 +100,7 @@ Nothing the demo needs lives in `%TEMP%`:
 
 Closing the app window stops the fake switcher, cameras and NDI senders.
 
-The app connects to `192.168.10.159` by default; override it with `CUEVIDEO_ATEM`.
+The app connects to `192.168.10.159` by default; override it with `CUEVIDEO_ATEM`. Any `CUEVIDEO_` setting marks the run as a demo or self-test: it reads `config.json` but never writes it.
 
 ## Working without the switcher or cameras
 
@@ -114,13 +114,15 @@ $env:CUEVIDEO_ATEM = "127.0.0.1"
 dotnet run --project windows\src\CueVideo.App
 ```
 
+This is a demo run, so Engineer edits stay on screen but are not saved.
+
 The six fake feeds are named `CueVideo CAM1` â€¦ `CueVideo CAM6`; map them to inputs in `pictures` in the config. `CUEVIDEO_NDI_NEXT` / `CUEVIDEO_NDI_LIVE` still override a tile with one fixed source when needed.
 
 `dotnet run --project windows\src\CueVideo.Spike -- atem 192.168.10.159 8` prints the real handshake, program/preview and link transitions without opening the UI. `dotnet run --project windows\src\CueVideo.Spike -- ndi 4` lists the NDI sources currently on the network.
 
 ## Configuration
 
-`%APPDATA%\CueVideo\config.json`, same schema as the macOS app (`atemHost`, `me`, `sources`, `cameras`, `keys`, `pictures`, `trackSpeed`, ...), with unknown keys preserved and a `config.last-good.json` fallback. On first run the audited booth setup is written as the default. `CUEVIDEO_CONFIG_DIR` points the app at another folder.
+`%APPDATA%\CueVideo\config.json`, same schema as the macOS app (`atemHost`, `me`, `sources`, `cameras`, `keys`, `pictures`, `trackSpeed`, ...), with unknown keys preserved and a `config.last-good.json` fallback. On first run the audited booth setup is written as the default. `CUEVIDEO_CONFIG_DIR` points the app at another folder; a run with any `CUEVIDEO_` setting is a demo or self-test and never writes the setup. The store polls the file every half second, so a hand edit reaches the operator screen without a restart, and a file that will not parse is copied to `config.unreadable-<timestamp>.json` before the next save replaces it.
 
 Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; the app recalls 1-9 with their configured names ("Full Stage", "Sermon"). Each camera's shot row shows its saved shots from `shots`, in file order: a place shot moves the camera to its counts, an exposure shot sets its exposure. A camera with no saved shots falls back to the presets named in `presetNames`, ordered by `presetOrder` and then number.
 

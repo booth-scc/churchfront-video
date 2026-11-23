@@ -25,7 +25,7 @@ public class CameraProtocolTests : IDisposable
         }
         """);
 
-        var store = new ConfigStore(_directory);
+        using var store = new ConfigStore(_directory, readOnly: false);
         store.Load();
 
         Assert.Null(store.FileError);
