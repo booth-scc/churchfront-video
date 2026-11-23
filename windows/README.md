@@ -20,6 +20,19 @@ Every edit is written straight to `config.json`, and the operator window reloads
 - **Space** cuts, **Return** fades, matching the hints on the buttons. They only act while the Operator screen is showing, and never while a dialog is open or a text field has focus, so editing the Engineer setup cannot change what is live.
 - The gear dialog saves the current camera view into camera presets **20-23** and recalls them, leaving the Stream Deck's 1-9 untouched.
 
+Before closing a shortcut, focus or dialog change, check by hand:
+
+- Enter Engineer > Setup, focus an IP, name or port field, then press Space and Return. Nothing should cut or fade.
+- Open the More dialog, then press Space and Return. Nothing should cut or fade.
+
+## Checks
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\check.ps1
+```
+
+This builds the solution and runs `windows/tests/CueVideo.Tests`. CI runs the same script on Windows for changes under `windows/`.
+
 ## Requirements
 
 - .NET SDK 10 (the .NET 8 SDK that shipped with the booth PC is out of support as of November 2026)
