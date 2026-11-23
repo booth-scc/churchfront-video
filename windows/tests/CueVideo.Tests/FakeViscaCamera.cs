@@ -25,6 +25,7 @@ internal sealed class FakeViscaCamera : IDisposable
     public int AeMode { get; set; } = 0x03;
     public int WhiteBalanceMode { get; set; } = 0x00;
     public int ColourTemperature { get; set; } = 0x10;
+    public int ReplyDelayMs { get; set; }
 
     public FakeViscaCamera()
     {
@@ -67,6 +68,8 @@ internal sealed class FakeViscaCamera : IDisposable
             var payload = packet[8..];
 
             lock (_received) _received.Add(payload);
+
+            if (ReplyDelayMs > 0) Thread.Sleep(ReplyDelayMs);
 
             var reply = Answer(payload);
             if (reply is null) continue;

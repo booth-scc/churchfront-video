@@ -1,5 +1,6 @@
 using CueVideo.Atem;
 using CueVideo.Core;
+using CueVideo.Visca;
 
 namespace CueVideo.Tests;
 
@@ -132,6 +133,179 @@ public sealed class BoothTests : IDisposable
         Assert.Equal("CAM2", rendered.ProgramLabel);
         Assert.Equal(1, rendered.PreviewInput);
         Assert.Equal("CAM1", rendered.PreviewLabel);
+    }
+
+    [Fact]
+    public void CameraOnNextFollowsThePreviewBus()
+    {
+        using var booth = NewBooth(out var switcher);
+        booth.Config.Cameras.Clear();
+        booth.Config.Cameras.Add(new PtzCameraConfig { Name = "Cam-1", Host = "192.168.10.183", AtemInput = 1 });
+        booth.Config.Cameras.Add(new PtzCameraConfig { Name = "Cam-3", Host = "192.168.10.149", AtemInput = 3 });
+
+        var state = new AtemState();
+        state.Inputs[1] = new AtemInput(1, "Camera 1", "CAM1");
+        state.Inputs[3] = new AtemInput(3, "Camera 3", "CAM3");
+        state.Preview[0] = 3;
+        switcher.Push(state);
+
+        var onCamera = booth.Render();
+        Assert.Equal("Cam-3", onCamera.CameraOnNext?.Name);
+        Assert.Equal("Cam-3", onCamera.CameraOnNextLabel);
+        Assert.Null(onCamera.CameraOnNextNotice);
+        Assert.Null(onCamera.CameraOnNextProblem);
+
+        state.Preview[0] = 2;
+        switcher.Push(state);
+
+        var onNothing = booth.Render();
+        Assert.Null(onNothing.CameraOnNext);
+        Assert.Equal(onNothing.PreviewLabel, onNothing.CameraOnNextLabel);
+        Assert.Equal("No camera on Next.", onNothing.CameraOnNextProblem);
+    }
+
+    [Fact]
+    public void CameraOnNextSaysWhenThePortCannotDriveItsProtocol()
+    {
+        using var booth = NewBooth(out var switcher);
+        booth.Config.Cameras.Clear();
+        booth.Config.Cameras.Add(new PtzCameraConfig
+        {
+            Name = "Cam-Canon",
+            Host = "192.168.10.99",
+            AtemInput = 1,
+            Proto = "canonXC",
+        });
+
+        var state = new AtemState();
+        state.Preview[0] = 1;
+        switcher.Push(state);
+
+        var rendered = booth.Render();
+
+        Assert.Equal("Cam-Canon", rendered.CameraOnNext?.Name);
+        Assert.Equal("Canon (HTTP) · unsupported by this port", rendered.CameraOnNextNotice);
+        Assert.Equal("Cam-Canon · Canon (HTTP) unsupported by this port.", rendered.CameraOnNextProblem);
+    }
+
+    [Fact]
+    public async Task CameraCommandsGoThroughTheBoothOwnedLinkOnNext()
+    {
+        using var fake = new FakeViscaCamera();
+        using var booth = NewBooth(out var switcher);
+        booth.Config.Cameras.Clear();
+        booth.Config.Cameras.Add(new PtzCameraConfig
+        {
+            Name = "Cam-1",
+            Host = "127.0.0.1",
+            Port = fake.Port,
+            AtemInput = 1,
+            FirstPreset = 20,
+        });
+
+        var state = new AtemState();
+        state.Preview[0] = 1;
+        switcher.Push(state);
+
+        var link = booth.LinkOnNext();
+        Assert.NotNull(link);
+        Assert.Same(link, booth.LinkOnNext());            // one connection per camera on Next
+        Assert.Same(link, booth.Cameras.LinkFor(1));       // and the shots rows share it
+
+        link.Drive(1, 0);
+        link.Recall(8);
+        link.Store(20);
+        booth.Cameras.LinkFor(1)!.Recall(9);
+
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < deadline &&
+               !fake.Received.Any(p => p.SequenceEqual(ViscaCommands.PresetRecall(9, 20))))
+        {
+            await Task.Delay(25);
+        }
+
+        Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.Drive(1, 0)));
+        Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.PresetRecall(8, 20)));
+        Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.PresetStore(20, 20)));
+        Assert.Contains(fake.Received, p => p.SequenceEqual(ViscaCommands.PresetRecall(9, 20)));
+    }
+
+    [Fact]
+    public async Task ExposureForTheCameraOnNextArrivesInTheSnapshot()
+    {
+        using var fake = new FakeViscaCamera();
+        using var booth = NewBooth(out var switcher);
+        booth.Config.Cameras.Clear();
+        booth.Config.Cameras.Add(new PtzCameraConfig
+        {
+            Name = "Cam-1",
+            Host = "127.0.0.1",
+            Port = fake.Port,
+            AtemInput = 1,
+        });
+
+        var state = new AtemState();
+        state.Preview[0] = 1;
+        switcher.Push(state);
+
+        await booth.RefreshExposureAsync();
+
+        var rendered = booth.Render();
+        Assert.Equal("6 dB", rendered.Exposure.Gain);
+        Assert.Equal("1/60", rendered.Exposure.Shutter);
+        Assert.Equal("f/6.8", rendered.Exposure.Iris);
+        Assert.Equal("Auto", rendered.Exposure.WhiteBalance);
+        Assert.Equal("Cam-1 exposure", rendered.ExposureSubject);
+    }
+
+    [Fact]
+    public async Task ExposureIsUnknownWhenNothingIsOnNext()
+    {
+        using var booth = NewBooth(out var switcher);
+        booth.Config.Cameras.Clear();
+
+        await booth.RefreshExposureAsync();
+
+        Assert.Equal(ExposureReadout.Unknown, booth.Render().Exposure);
+    }
+
+    [Fact]
+    public async Task ALateExposureReadForTheOldCameraIsDropped()
+    {
+        using var slow = new FakeViscaCamera { ReplyDelayMs = 600, GainLevel = 10 };
+        using var fast = new FakeViscaCamera { GainLevel = 4 };
+        using var booth = NewBooth(out var switcher);
+        booth.Config.Cameras.Clear();
+        booth.Config.Cameras.Add(new PtzCameraConfig
+        {
+            Name = "Cam-1",
+            Host = "127.0.0.1",
+            Port = slow.Port,
+            AtemInput = 1,
+        });
+        booth.Config.Cameras.Add(new PtzCameraConfig
+        {
+            Name = "Cam-3",
+            Host = "127.0.0.1",
+            Port = fast.Port,
+            AtemInput = 3,
+        });
+
+        var state = new AtemState();
+        state.Preview[0] = 1;
+        switcher.Push(state);
+
+        var stale = booth.RefreshExposureAsync();     // asks the slow camera on 1
+
+        state.Preview[0] = 3;
+        switcher.Push(state);
+
+        await booth.RefreshExposureAsync();           // asks the fast camera on 3
+        await stale;
+
+        var rendered = booth.Render();
+        Assert.Equal(3, rendered.PreviewInput);
+        Assert.Equal("4 dB", rendered.Exposure.Gain);
     }
 
     [Fact]

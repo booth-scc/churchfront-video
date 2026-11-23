@@ -51,9 +51,36 @@ public sealed record BoothSnapshot(
     BoothStatus Status,
     bool InTransition,
     double FadeSeconds,
-    bool Black)
+    bool Black,
+    PtzCameraConfig? CameraOnNext,
+    ExposureReadout Exposure)
 {
     /// <summary>A source's tally, or neither bus when the switcher has not named it.</summary>
     public SourceTally TallyFor(int input) =>
         Tally.TryGetValue(input, out var tally) ? tally : new SourceTally(Live: false, Next: false);
+
+    /// <summary>The label under the camera chip: the camera on Next, or the preview source when there is none.</summary>
+    public string CameraOnNextLabel => CameraOnNext?.Name ?? PreviewLabel;
+
+    /// <summary>The notice under the camera chip when the port cannot drive its protocol.</summary>
+    public string? CameraOnNextNotice => CameraOnNext is { IsSupported: false } camera
+        ? $"{camera.ProtocolLabel} · unsupported by this port"
+        : null;
+
+    /// <summary>Why the camera on Next cannot be driven; null when it can.</summary>
+    public string? CameraOnNextProblem => CameraOnNext switch
+    {
+        null => "No camera on Next.",
+        { IsSupported: false } camera => $"{camera.Name} · {camera.ProtocolLabel} unsupported by this port.",
+        { Host: var host } camera when string.IsNullOrWhiteSpace(host) => $"{camera.Name} has no address.",
+        _ => null,
+    };
+
+    /// <summary>The subject of the exposure rows: which camera they describe.</summary>
+    public string ExposureSubject => CameraOnNext switch
+    {
+        null => "No camera on Next",
+        { IsSupported: false } camera => $"{camera.Name} · {camera.ProtocolLabel} unsupported",
+        var camera => $"{camera.Name} exposure",
+    };
 }

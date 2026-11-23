@@ -33,15 +33,14 @@ public partial class MainWindow : Window
     private readonly Booth _booth = new(new ConfigStore(), new AtemClient());
     private readonly List<SourceTile> _tiles = [];
     private readonly List<NdiView> _thumbs = [];
-    private readonly Dictionary<int, ViscaIpLink> _links = [];
 
     private EngineerView? _engineerView;
     private NdiView? _liveView;
     private NdiView? _nextView;
     private string? _nextNdiName;
     private string? _liveNdiName;
-    private int _nextInput = 1;
-    private int _programInput = 1;
+    private int _shownPreview = 1;
+    private int _shownProgram = 1;
     private bool _initialised;
     private double _speed = 1.0;
 
@@ -104,7 +103,6 @@ public partial class MainWindow : Window
         WireTransport();
         WireCameraPanel();
         WireSpeed();
-        UpdateCameraProtocolNotice();
 
         _booth.Connect(host ?? "");
 
@@ -127,12 +125,10 @@ public partial class MainWindow : Window
         foreach (var thumb in _thumbs) thumb.Dispose();
         _thumbs.Clear();
 
-        foreach (var link in _links.Values) link.Dispose();
-        _links.Clear();
-
         _engineerView?.Dispose();
         _engineerView = null;
 
+        // The Booth owns the camera links and closes them with itself.
         _booth.Dispose();
     }
 
@@ -245,8 +241,7 @@ public partial class MainWindow : Window
         _thumbs.Clear();
 
         // A camera may have changed address or protocol; never keep driving the old one.
-        foreach (var link in _links.Values) link.Dispose();
-        _links.Clear();
+        _booth.ReloadCameras();
 
         BuildSourceTiles();
 
@@ -256,15 +251,10 @@ public partial class MainWindow : Window
             _booth.Connect(host);
         }
 
+        // The rebuilt tiles must take every part of the snapshot, including exposure.
         _liveNdiName = null;
         _nextNdiName = null;
-        UpdateLiveTile(_programInput);
-        UpdateNextTile();
-        UpdateCameraProtocolNotice();
-        BuildShots();
-        _ = ShowExposureAsync();
-
-        // The rebuilt tiles must take their tally and status from the same snapshot.
+        _initialised = false;
         ShowBooth(_booth.Render());
     }
 
@@ -288,32 +278,25 @@ public partial class MainWindow : Window
 
     private void WireCameraPanel()
     {
-        Hold(PanUpLeft, () => Drive(-1, 1), () => Link()?.StopMove());
-        Hold(PanUp, () => Drive(0, 1), () => Link()?.StopMove());
-        Hold(PanUpRight, () => Drive(1, 1), () => Link()?.StopMove());
-        Hold(PanLeft, () => Drive(-1, 0), () => Link()?.StopMove());
-        Hold(PanRight, () => Drive(1, 0), () => Link()?.StopMove());
-        Hold(PanDownLeft, () => Drive(-1, -1), () => Link()?.StopMove());
-        Hold(PanDown, () => Drive(0, -1), () => Link()?.StopMove());
-        Hold(PanDownRight, () => Drive(1, -1), () => Link()?.StopMove());
+        Hold(PanUpLeft, () => Drive(-1, 1), () => _booth.LinkOnNext()?.StopMove());
+        Hold(PanUp, () => Drive(0, 1), () => _booth.LinkOnNext()?.StopMove());
+        Hold(PanUpRight, () => Drive(1, 1), () => _booth.LinkOnNext()?.StopMove());
+        Hold(PanLeft, () => Drive(-1, 0), () => _booth.LinkOnNext()?.StopMove());
+        Hold(PanRight, () => Drive(1, 0), () => _booth.LinkOnNext()?.StopMove());
+        Hold(PanDownLeft, () => Drive(-1, -1), () => _booth.LinkOnNext()?.StopMove());
+        Hold(PanDown, () => Drive(0, -1), () => _booth.LinkOnNext()?.StopMove());
+        Hold(PanDownRight, () => Drive(1, -1), () => _booth.LinkOnNext()?.StopMove());
 
-        ZoomInButton.Click += (_, _) => Link()?.Zoom(Math.Clamp(0.6 * _speed, 0, 1));
-        ZoomOutButton.Click += (_, _) => Link()?.Zoom(-Math.Clamp(0.6 * _speed, 0, 1));
-        FocusButton.Click += (_, _) => Link()?.AutoFocus(true);
+        ZoomInButton.Click += (_, _) => _booth.LinkOnNext()?.Zoom(Math.Clamp(0.6 * _speed, 0, 1));
+        ZoomOutButton.Click += (_, _) => _booth.LinkOnNext()?.Zoom(-Math.Clamp(0.6 * _speed, 0, 1));
+        FocusButton.Click += (_, _) => _booth.LinkOnNext()?.AutoFocus(true);
 
-        ExposureAutoButton.Click += async (_, _) =>
-        {
-            if (Link() is { } link)
-            {
-                await link.AutoExposureAsync();
-                await ShowExposureAsync();
-            }
-        };
+        ExposureAutoButton.Click += async (_, _) => await _booth.AutoExposureAsync();
     }
 
     private void Drive(double pan, double tilt)
     {
-        Link()?.Drive(Math.Clamp(pan * _speed, -1, 1), Math.Clamp(tilt * _speed, -1, 1));
+        _booth.LinkOnNext()?.Drive(Math.Clamp(pan * _speed, -1, 1), Math.Clamp(tilt * _speed, -1, 1));
     }
 
     private static void Hold(Button button, Action start, Action stop)
@@ -323,41 +306,7 @@ public partial class MainWindow : Window
         button.PointerCaptureLost += (_, _) => stop();
     }
 
-    private ViscaIpLink? Link() => LinkFor(_nextInput);
-
-    private ViscaIpLink? LinkFor(int input)
-    {
-        var camera = _booth.Config.CameraForInput(input);
-        if (camera is null || !camera.IsSupported) return null;
-
-        if (_links.TryGetValue(input, out var existing)) return existing;
-
-        var link = CameraLinks.Open(camera);
-        if (link is not null) _links[input] = link;
-        return link;
-    }
-
-    private void UpdateCameraProtocolNotice()
-    {
-        var camera = _booth.Config.CameraForInput(_nextInput);
-        var unsupported = camera is { IsSupported: false };
-
-        CameraProtocolNotice.IsVisible = unsupported;
-        CameraProtocolNotice.Text = unsupported
-            ? $"{camera!.ProtocolLabel} · unsupported by this port"
-            : "";
-    }
-
-    /// <summary>Why the camera on Next cannot be driven, for buttons that would otherwise lie.</summary>
-    private string CannotDriveReason()
-    {
-        var camera = _booth.Config.CameraForInput(_nextInput);
-        if (camera is null) return "No camera on Next.";
-        if (!camera.IsSupported) return $"{camera.Name} · {camera.ProtocolLabel} unsupported by this port.";
-        return $"{camera.Name} has no address.";
-    }
-
-    private void BuildShots()
+    private void BuildShots(PtzCameraConfig? cameraOnNext)
     {
         ShotRows.Children.Clear();
 
@@ -371,7 +320,8 @@ public partial class MainWindow : Window
                 ColumnSpacing = 5,
             };
 
-            var isNext = input == _nextInput;
+            // The row for the camera the snapshot put on Next, not a second lookup.
+            var isNext = camera.Id == cameraOnNext?.Id;
 
             var cameraButton = new Button
             {
@@ -412,7 +362,7 @@ public partial class MainWindow : Window
 
                 var slot = preset;
                 var cameraInput = input;
-                shot.Click += (_, _) => LinkFor(cameraInput)?.Recall(slot);
+                shot.Click += (_, _) => _booth.Cameras.LinkFor(cameraInput)?.Recall(slot);
                 if (!camera.IsSupported) ToolTip.SetTip(shot, $"{camera.ProtocolLabel} unsupported by this port");
 
                 Grid.SetColumn(shot, column++);
@@ -423,42 +373,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task ShowExposureAsync()
-    {
-        var camera = _booth.Config.CameraForInput(_nextInput);
-        ExposureCamText.Text = camera is null
-            ? "No camera on Next"
-            : camera.IsSupported
-                ? $"{camera.Name} exposure"
-                : $"{camera.Name} · {camera.ProtocolLabel} unsupported";
-
-        var link = Link();
-        if (link is null)
-        {
-            ExposureGain.Text = ExposureShutter.Text = ExposureIris.Text = ExposureWhite.Text = "—";
-            return;
-        }
-
-        var exposure = await link.ReadExposureAsync(TimeSpan.FromMilliseconds(1500));
-        if (exposure is null) return;
-
-        ExposureGain.Text = exposure.Gain is { } gain ? $"{gain} dB" : "Auto";
-        ExposureShutter.Text = exposure.Shutter is { } shutter ? $"1/{shutter:0}" : "Auto";
-        ExposureIris.Text = exposure.Iris is { } iris ? $"f/{iris / 100.0:0.#}" : "Auto";
-        ExposureWhite.Text = exposure.WhiteBalance switch
-        {
-            "auto" => "Auto",
-            "kelvin" => exposure.Kelvin is { } kelvin ? $"{kelvin} K" : "Kelvin",
-            null => "—",
-            var mode => mode,
-        };
-    }
-
     // ---- Pictures ----
 
     private void AttachLive()
     {
-        UpdateLiveTile(_programInput);
+        UpdateLiveTile(_shownProgram);
     }
 
     private void UpdateLiveTile(int program)
@@ -487,13 +406,13 @@ public partial class MainWindow : Window
         _liveView.Start();
     }
 
-    private void UpdateNextTile()
+    private void UpdateNextTile(int preview)
     {
         var source = Environment.GetEnvironmentVariable("CUEVIDEO_NDI_NEXT");
 
         if (string.IsNullOrWhiteSpace(source))
         {
-            source = _booth.NdiFor(_nextInput);
+            source = _booth.NdiFor(preview);
         }
 
         if (string.Equals(source, _nextNdiName, StringComparison.OrdinalIgnoreCase)) return;
@@ -516,36 +435,47 @@ public partial class MainWindow : Window
     // ---- State ----
 
     /// <summary>
-    /// The Operator screen's one render path: program, preview, tally, status and the
-    /// transition labels all come from the same Booth snapshot.
+    /// The Operator screen's one render path: program, preview, tally, status, the camera on
+    /// Next and its exposure all come from the same Booth snapshot.
     /// </summary>
     private void ShowBooth(BoothSnapshot state)
     {
         ProgramSource.Text = state.ProgramLabel;
         NextSource.Text = state.PreviewLabel;
 
-        var previewChanged = state.PreviewInput != _nextInput || !_initialised;
-        var programChanged = state.ProgramInput != _programInput || !_initialised;
+        var previewChanged = state.PreviewInput != _shownPreview || !_initialised;
+        var programChanged = state.ProgramInput != _shownProgram || !_initialised;
 
         _initialised = true;
-        _nextInput = state.PreviewInput;
-        _programInput = state.ProgramInput;
+        _shownPreview = state.PreviewInput;
+        _shownProgram = state.ProgramInput;
 
         ShowTally(state);
         ShowSwitcherLabels(state);
         ShowStatus(state.Status);
+        ShowCamera(state);
 
         if (programChanged) UpdateLiveTile(state.ProgramInput);
 
         if (!previewChanged) return;
 
-        var camera = _booth.Config.CameraForInput(_nextInput);
-        CameraChipName.Text = camera?.Name ?? state.PreviewLabel;
-        UpdateCameraProtocolNotice();
+        BuildShots(state.CameraOnNext);
+        UpdateNextTile(state.PreviewInput);
+        _ = _booth.RefreshExposureAsync();
+    }
 
-        BuildShots();
-        UpdateNextTile();
-        _ = ShowExposureAsync();
+    private void ShowCamera(BoothSnapshot state)
+    {
+        CameraChipName.Text = state.CameraOnNextLabel;
+
+        CameraProtocolNotice.IsVisible = state.CameraOnNextNotice is not null;
+        CameraProtocolNotice.Text = state.CameraOnNextNotice ?? "";
+
+        ExposureCamText.Text = state.ExposureSubject;
+        ExposureGain.Text = state.Exposure.Gain;
+        ExposureShutter.Text = state.Exposure.Shutter;
+        ExposureIris.Text = state.Exposure.Iris;
+        ExposureWhite.Text = state.Exposure.WhiteBalance;
     }
 
     private void ShowTally(BoothSnapshot state)
@@ -599,9 +529,9 @@ public partial class MainWindow : Window
         var near = Ghost("Near");
         var auto = Ghost("Auto");
         var far = Ghost("Far");
-        Hold(near, () => Link()?.FocusNear(), () => Link()?.StopFocus());
-        Hold(far, () => Link()?.FocusFar(), () => Link()?.StopFocus());
-        auto.Click += (_, _) => Link()?.AutoFocus(true);
+        Hold(near, () => _booth.LinkOnNext()?.FocusNear(), () => _booth.LinkOnNext()?.StopFocus());
+        Hold(far, () => _booth.LinkOnNext()?.FocusFar(), () => _booth.LinkOnNext()?.StopFocus());
+        auto.Click += (_, _) => _booth.LinkOnNext()?.AutoFocus(true);
         focusRow.Children.Add(near);
         focusRow.Children.Add(auto);
         focusRow.Children.Add(far);
@@ -640,7 +570,7 @@ public partial class MainWindow : Window
             };
 
             var preset = number;
-            button.Click += (_, _) => Link()?.Recall(preset);
+            button.Click += (_, _) => _booth.LinkOnNext()?.Recall(preset);
             presets.Children.Add(button);
         }
         panel.Children.Add(presets);
@@ -657,36 +587,33 @@ public partial class MainWindow : Window
         var saveRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         var recallRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
 
+        // One link for the check and the command, so a skipped command never reports success.
+        void RunOnCameraOnNext(Action<ViscaIpLink> command, string done)
+        {
+            if (_booth.LinkOnNext() is not { } link)
+            {
+                saveStatus.Text = _booth.Render().CameraOnNextProblem ?? "No camera on Next.";
+                return;
+            }
+
+            command(link);
+            saveStatus.Text = done;
+        }
+
         foreach (var number in new[] { 20, 21, 22, 23 })
         {
             var save = Ghost($"Save {number}");
             save.Width = 72;
             var slot = number;
-            save.Click += (_, _) =>
-            {
-                if (Link() is not { } link)
-                {
-                    saveStatus.Text = CannotDriveReason();
-                    return;
-                }
-
-                link.Store(slot);
-                saveStatus.Text = $"Saved the current view to camera preset {slot}.";
-            };
+            save.Click += (_, _) => RunOnCameraOnNext(
+                link => link.Store(slot),
+                $"Saved the current view to camera preset {slot}.");
 
             var recall = Ghost($"Go {number}");
             recall.Width = 68;
-            recall.Click += (_, _) =>
-            {
-                if (Link() is not { } link)
-                {
-                    saveStatus.Text = CannotDriveReason();
-                    return;
-                }
-
-                link.Recall(slot);
-                saveStatus.Text = $"Recalled camera preset {slot}.";
-            };
+            recall.Click += (_, _) => RunOnCameraOnNext(
+                link => link.Recall(slot),
+                $"Recalled camera preset {slot}.");
 
             saveRow.Children.Add(save);
             recallRow.Children.Add(recall);
@@ -698,14 +625,7 @@ public partial class MainWindow : Window
 
         panel.Children.Add(Heading("EXPOSURE"));
         var exposureAuto = Ghost("Auto exposure");
-        exposureAuto.Click += async (_, _) =>
-        {
-            if (Link() is { } link)
-            {
-                await link.AutoExposureAsync();
-                await ShowExposureAsync();
-            }
-        };
+        exposureAuto.Click += async (_, _) => await _booth.AutoExposureAsync();
         panel.Children.Add(exposureAuto);
 
         dialog.Content = new ScrollViewer { Content = panel };
