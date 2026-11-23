@@ -26,7 +26,8 @@ public sealed class ConfigStore : IDisposable
     private static readonly string EmptyConfigJson = JsonSerializer.Serialize(new CueConfig(), Options);
 
     private readonly object _gate = new();
-    private Timer? _timer;
+    private readonly TimeProvider _time;
+    private ITimer? _timer;
     private (DateTime WrittenUtc, long Length)? _lastSignature;
     private bool _preserveFileOnSave;
     private volatile bool _disposed;
@@ -35,6 +36,12 @@ public sealed class ConfigStore : IDisposable
     private int _version;
 
     public ConfigStore(string? directory = null, bool? readOnly = null)
+        : this(directory, readOnly, TimeProvider.System)
+    {
+    }
+
+    /// <summary>Lets tests drive the poll clock; the app always uses the system clock.</summary>
+    internal ConfigStore(string? directory, bool? readOnly, TimeProvider time)
     {
         directory ??= Environment.GetEnvironmentVariable("CUEVIDEO_CONFIG_DIR") is { Length: > 0 } custom
             ? custom
@@ -45,6 +52,7 @@ public sealed class ConfigStore : IDisposable
         Path = System.IO.Path.Combine(Directory, "config.json");
         LastGoodPath = System.IO.Path.Combine(Directory, "config.last-good.json");
         ReadOnly = readOnly ?? IsSelfTestRun(Environment.GetEnvironmentVariables().Keys.Cast<string>());
+        _time = time;
     }
 
     public string Directory { get; }
@@ -221,7 +229,7 @@ public sealed class ConfigStore : IDisposable
         lock (_gate)
         {
             if (_disposed) return;
-            _timer ??= new Timer(_ => Poll(), null, PollInterval, PollInterval);
+            _timer ??= _time.CreateTimer(_ => Poll(), null, PollInterval, PollInterval);
         }
     }
 

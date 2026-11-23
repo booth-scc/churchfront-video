@@ -2,7 +2,9 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using CueVideo.Atem;
 using CueVideo.Core;
+using CueVideo.TestSupport;
 using CueVideo.Visca;
+using Microsoft.Extensions.Time.Testing;
 
 namespace CueVideo.Tests;
 
@@ -526,18 +528,17 @@ public sealed class BoothTests : IDisposable
     }
 
     [Fact]
-    public async Task AHandEditIsAppliedOnThePostingThread()
+    public void AHandEditIsAppliedOnThePostingThread()
     {
-        var store = new ConfigStore(_directory, readOnly: false);
+        var time = new FakeTimeProvider();
+        var store = new ConfigStore(_directory, readOnly: false, time: time);
         store.Load();
-        var switcher = new FakeSwitcher();
+        var switcher = new RecordingSwitcher();
         var posted = new ConcurrentQueue<Action>();
         using var booth = new Booth(store, switcher, posted.Enqueue);
 
         File.WriteAllText(Path.Combine(_directory, "config.json"), """{ "atemHost": "192.168.10.160" }""");
-
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (!posted.TryPeek(out _) && DateTime.UtcNow < deadline) await Task.Delay(25);
+        time.Advance(TimeSpan.FromMilliseconds(999));
 
         Assert.True(posted.TryDequeue(out var apply), "the setup change was not posted to the UI thread.");
         Assert.Equal("", switcher.Host);                  // the poll thread touched nothing
@@ -550,7 +551,7 @@ public sealed class BoothTests : IDisposable
     {
         var store = new ConfigStore(_directory, readOnly: true);
         store.Load();
-        using var booth = new Booth(store, new FakeSwitcher());
+        using var booth = new Booth(store, new RecordingSwitcher());
 
         booth.SetPicture(2, "CueVideo CAM2");
 
@@ -571,55 +572,11 @@ public sealed class BoothTests : IDisposable
     /// A Booth over the booth-default config. That config already names Cam-1..4 on inputs
     /// 1-4, so a test named for a camera setup must clear or replace them.
     /// </summary>
-    private Booth NewBooth(out FakeSwitcher switcher)
+    private Booth NewBooth(out RecordingSwitcher switcher)
     {
         var store = new ConfigStore(_directory, readOnly: false);
         store.Load();
-        switcher = new FakeSwitcher();
+        switcher = new RecordingSwitcher();
         return new Booth(store, switcher);
     }
-}
-
-/// <summary>A switcher that pushes state on demand instead of speaking UDP.</summary>
-internal sealed class FakeSwitcher : ISwitcher
-{
-    public AtemLink Link { get; private set; } = new(AtemLinkState.Idle);
-    public AtemState State { get; private set; } = new();
-    public string Host { get; private set; } = "";
-    public List<string> Commands { get; } = [];
-
-    public event Action<AtemLink>? LinkChanged;
-    public event Action<AtemState>? StateChanged;
-
-    public void Connect(string host, int port = 9910)
-    {
-        Host = host;
-        SetLink(new AtemLink(AtemLinkState.Connecting));
-    }
-
-    public void Push(AtemState state)
-    {
-        State = state;
-        StateChanged?.Invoke(state);
-    }
-
-    public void SetLink(AtemLink link)
-    {
-        Link = link;
-        LinkChanged?.Invoke(link);
-    }
-
-    public void SetPreview(int source, int me = 0) => Commands.Add($"preview {source} on {me}");
-
-    public void Cut(int me = 0) => Commands.Add($"cut {me}");
-
-    public void Auto(int me = 0) => Commands.Add($"auto {me}");
-
-    public void FadeToBlack(int me = 0) => Commands.Add($"black {me}");
-
-    public void SetKeyOnAir(int keyer, bool on, int me = 0) => Commands.Add($"key {keyer} {on} on {me}");
-
-    public void SetDskOnAir(int dsk, bool on) => Commands.Add($"dsk {dsk} {on}");
-
-    public void Dispose() { }
 }

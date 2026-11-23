@@ -39,7 +39,7 @@ Before closing a shortcut, focus or dialog change, check by hand:
 powershell -ExecutionPolicy Bypass -File windows\check.ps1
 ```
 
-This builds the solution, checks C# formatting (`dotnet format whitespace`) and runs `windows/tests/CueVideo.Tests`. CI runs the same script on Windows for changes under `windows/`.
+This builds the solution, checks C# formatting (`dotnet format whitespace`) and runs the test projects in `windows/tests`. CI runs the same script on Windows for changes under `windows/`.
 
 When a test fails, drop `-v q` (or add `--logger "console;verbosity=normal"`) to see the assertion message:
 
@@ -138,6 +138,8 @@ Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; th
 | `src/CueVideo.App` | Avalonia operator UI | `VolunteerView.swift` and friends |
 | `src/CueVideo.Spike` | Phase 0 doctor and gate harness | `Tools/fake_atem.py` + `SelfTest.swift` |
 | `tests/CueVideo.Tests` | Unit tests | `Tests/` |
+| `tests/CueVideo.App.Tests` | Headless Avalonia window tests (config reload rebuilds tiles and status) | manual demo checklist |
+| `tests/CueVideo.TestSupport` | Shared test doubles, such as the fake switcher | |
 
 ## Deliberate divergences from the macOS app
 

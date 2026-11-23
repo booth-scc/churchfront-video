@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using System.Text.Json;
 using CueVideo.Core;
+using Microsoft.Extensions.Time.Testing;
 
 namespace CueVideo.Tests;
 
@@ -127,51 +127,55 @@ public sealed class ConfigTests : IDisposable
     }
 
     [Fact]
-    public async Task AnExternalEditReachesTheStoreWithinASecond()
+    public void AnExternalEditReachesTheStoreWithinASecond()
     {
         Directory.CreateDirectory(_directory);
         var path = Path.Combine(_directory, "config.json");
         File.WriteAllText(path, """{ "atemHost": "192.168.10.159" }""");
 
-        using var store = new ConfigStore(_directory, readOnly: false);
+        var time = new FakeTimeProvider();
+        using var store = new ConfigStore(_directory, readOnly: false, time: time);
         store.Load();
 
-        var reloaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        store.Changed += () => reloaded.TrySetResult();
+        var reloaded = false;
+        store.Changed += () => reloaded = true;
 
-        var started = Stopwatch.StartNew();
         File.WriteAllText(path, """{ "atemHost": "10.9.8.7" }""");
 
-        await reloaded.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        // One production poll is 500 ms; just under a second must be enough.
+        time.Advance(TimeSpan.FromMilliseconds(999));
 
-        Assert.True(started.Elapsed < TimeSpan.FromSeconds(1), $"the change took {started.Elapsed}.");
+        Assert.True(reloaded);
         Assert.Equal("10.9.8.7", store.Config.AtemHost);
         Assert.Null(store.FileError);
     }
 
     [Fact]
-    public async Task ATransientReadFailureIsRetriedWithoutArchivingTheFile()
+    public void ATransientReadFailureIsRetriedWithoutArchivingTheFile()
     {
         Directory.CreateDirectory(_directory);
         var path = Path.Combine(_directory, "config.json");
         File.WriteAllText(path, """{ "atemHost": "192.168.10.159" }""");
 
-        using var store = new ConfigStore(_directory, readOnly: false);
+        var time = new FakeTimeProvider();
+        using var store = new ConfigStore(_directory, readOnly: false, time: time);
         store.Load();
 
         // A file that cannot be read for a moment must not be treated as a broken setup.
         File.Delete(path);
         Directory.CreateDirectory(path);
-        await WaitUntil(() => store.FileError is not null);
+        time.Advance(TimeSpan.FromMilliseconds(999));
+        Assert.NotNull(store.FileError);
 
         Directory.Delete(path);
 
-        var reloaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        store.Changed += () => { if (store.FileError is null) reloaded.TrySetResult(); };
+        var reloaded = false;
+        store.Changed += () => { if (store.FileError is null) reloaded = true; };
 
         File.WriteAllText(path, """{ "atemHost": "10.9.8.7" }""");
-        await reloaded.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        time.Advance(TimeSpan.FromMilliseconds(999));
 
+        Assert.True(reloaded);
         Assert.Equal("10.9.8.7", store.Config.AtemHost);
         Assert.Empty(Directory.GetFiles(_directory, "config.unreadable-*.json"));
 
@@ -197,25 +201,28 @@ public sealed class ConfigTests : IDisposable
     }
 
     [Fact]
-    public async Task ARepairedFileRaisesEvenWhenTheSetupDidNotChange()
+    public void ARepairedFileRaisesEvenWhenTheSetupDidNotChange()
     {
         Directory.CreateDirectory(_directory);
         var path = Path.Combine(_directory, "config.json");
         File.WriteAllText(path, """{ "atemHost": "10.1.1.1" }""");
 
-        using var store = new ConfigStore(_directory, readOnly: true);
+        var time = new FakeTimeProvider();
+        using var store = new ConfigStore(_directory, readOnly: true, time: time);
         store.Load();
 
         File.WriteAllText(path, "{ this is not json");
-        await WaitUntil(() => store.FileError is not null);
+        time.Advance(TimeSpan.FromMilliseconds(999));
+        Assert.NotNull(store.FileError);
 
-        var cleared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        store.Changed += () => { if (store.FileError is null) cleared.TrySetResult(); };
+        var cleared = false;
+        store.Changed += () => { if (store.FileError is null) cleared = true; };
 
         // The same setup as the one already loaded: only the error state changes.
         File.WriteAllText(path, """{ "atemHost": "10.1.1.1" }""");
-        await cleared.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        time.Advance(TimeSpan.FromMilliseconds(999));
 
+        Assert.True(cleared);
         Assert.Null(store.FileError);
     }
 
@@ -249,13 +256,5 @@ public sealed class ConfigTests : IDisposable
         using var next = new ConfigStore(_directory, readOnly: false);
         next.Load();
         Assert.Equal("10.0.0.5", next.Config.AtemHost);
-    }
-
-    private static async Task WaitUntil(Func<bool> condition)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (!condition() && DateTime.UtcNow < deadline) await Task.Delay(25);
-
-        Assert.True(condition());
     }
 }

@@ -1,21 +1,22 @@
-# Builds the Windows solution and runs the test suite.
+# Builds the Windows solution and runs the test suites.
 # Usage: powershell -ExecutionPolicy Bypass -File windows\check.ps1
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$solution = Join-Path $root 'ChurchfrontVideo.sln'
 
 Write-Host 'Building Windows solution...'
-dotnet build (Join-Path $root 'ChurchfrontVideo.sln') --nologo --verbosity minimal
+dotnet build $solution --nologo --verbosity minimal
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
 Write-Host 'Checking formatting...'
-dotnet format (Join-Path $root 'ChurchfrontVideo.sln') whitespace --verify-no-changes --no-restore --verbosity minimal
+dotnet format $solution whitespace --verify-no-changes --no-restore --verbosity minimal
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
 Write-Host 'Running tests...'
-dotnet test (Join-Path $root 'tests\CueVideo.Tests\CueVideo.Tests.csproj') --no-build --nologo --verbosity minimal
+dotnet test $solution --no-build --nologo --verbosity minimal
 exit $LASTEXITCODE
