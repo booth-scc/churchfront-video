@@ -17,7 +17,7 @@ Every edit is written straight to `config.json`, and the operator window reloads
 
 ## Operator shortcuts and saving
 
-- **Space** cuts, **Return** fades, matching the hints on the buttons.
+- **Space** cuts, **Return** fades, matching the hints on the buttons. They only act while the Operator screen is showing, and never while a dialog is open or a text field has focus, so editing the Engineer setup cannot change what is live.
 - The gear dialog saves the current camera view into camera presets **20-23** and recalls them, leaving the Stream Deck's 1-9 untouched.
 
 ## Requirements

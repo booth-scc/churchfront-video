@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CueVideo.Atem;
 using CueVideo.Core;
 using CueVideo.Ndi;
@@ -56,17 +57,37 @@ public partial class MainWindow : Window
 
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
-        // The interface advertises these: Space cuts, Return fades.
+        // Space and Return belong to the Operator screen. They must never cut or fade
+        // while Engineer is showing, a dialog is open, or someone is typing in a field.
+        var key = e.Key switch
+        {
+            Key.Space => OperatorKey.Space,
+            Key.Enter => OperatorKey.Return,
+            _ => OperatorKey.Other,
+        };
+
+        if (key == OperatorKey.Other) return;
+
+        var focused = FocusManager?.GetFocusedElement();
+        var textFieldFocused = focused is Visual visual &&
+            visual.FindAncestorOfType<TextBox>(includeSelf: true) is not null;
+
+        var command = OperatorKeyboard.Resolve(
+            key,
+            OperatorView.IsVisible ? MainScreen.Operator : MainScreen.Engineer,
+            OwnedWindows.Count > 0,
+            textFieldFocused);
+
         var me = _config.Config.Me - 1;
 
-        switch (e.Key)
+        switch (command)
         {
-            case Key.Space:
+            case OperatorCommand.Cut:
                 _atem?.Cut(me);
                 e.Handled = true;
                 break;
 
-            case Key.Enter:
+            case OperatorCommand.Fade:
                 _atem?.Auto(me);
                 e.Handled = true;
                 break;
