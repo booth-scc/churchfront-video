@@ -42,6 +42,8 @@ Re-read the result before editing; a single-line body or a broken arrow means th
 
 Comments have the same escaping trap. Write Markdown with backticks or several lines to a temp file and pass `--body-file`; a double-quoted `--body` keeps the backslashes from escaped backticks.
 
+PowerShell quoting silently drops two values `gh` needs. A bare `@me` splats to an empty argument, so `--add-assignee @me` fails with `flag needs an argument: --add-assignee`; quote it (`--add-assignee "@me"`). It also strips the inner double quotes from a single-quoted `--jq` expression, so `.conclusion // "-"` reaches `jq` as `.conclusion // -` and fails to parse. Escape them (`.conclusion // \"-\"`, inline or in a variable); a here-string does not help. Or skip `--jq`: pipe into `ConvertFrom-Json` and format with `Select-Object`/`ForEach-Object`, as in the body workflow above.
+
 `git` and `gh` write progress to stderr, which PowerShell surfaces as an error record even when the command succeeded. Check `$LASTEXITCODE` (0 means success) before retrying a push, comment or close.
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
