@@ -42,7 +42,7 @@ Re-read the result before editing; a single-line body or a broken arrow means th
 
 Comments have the same escaping trap. Write Markdown with backticks or several lines to a temp file and pass `--body-file`; a double-quoted `--body` keeps the backslashes from escaped backticks.
 
-PowerShell quoting silently drops two values `gh` needs. A bare `@me` splats to an empty argument, so `--add-assignee @me` fails with `flag needs an argument: --add-assignee`; quote it (`--add-assignee "@me"`). It also strips the inner double quotes from a single-quoted `--jq` expression, so `.conclusion // "-"` reaches `jq` as `.conclusion // -` and fails to parse. Escape them (`.conclusion // \"-\"`, inline or in a variable); a here-string does not help. Or skip `--jq`: pipe into `ConvertFrom-Json` and format with `Select-Object`/`ForEach-Object`, as in the body workflow above.
+PowerShell strips two things `gh` needs. A bare `@me` disappears (PowerShell splats the undefined `$me` to nothing), so `--add-assignee @me` fails with `flag needs an argument: --add-assignee`; quote it (`--add-assignee "@me"`). It also strips the inner double quotes from a single-quoted `--jq` expression, so `.conclusion // "-"` reaches `jq` as `.conclusion // -` and fails to parse. Escape them (`.conclusion // \"-\"`, inline or in a variable); a here-string does not help. Or skip `--jq` as the body workflow above does.
 
 `git` and `gh` write progress to stderr, which PowerShell surfaces as an error record even when the command succeeded. Check `$LASTEXITCODE` (0 means success) before retrying a push, comment or close.
 
@@ -78,5 +78,5 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 - **Child ticket**: an issue linked to the map as a GitHub sub-issue (see **Make an issue a sub-issue of a parent**). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
 - **Blocking**: see **Blocking** under Conventions.
 - **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (see **Count open blockers**, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
-- **Claim**: `gh issue edit <n> --add-assignee @me`, the session's first write.
+- **Claim**: `gh issue edit <n> --add-assignee "@me"`, the session's first write.
 - **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.

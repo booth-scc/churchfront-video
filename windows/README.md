@@ -116,7 +116,7 @@ dotnet run --project windows\src\CueVideo.App
 
 This is a demo run, so Engineer edits stay on screen but are not saved.
 
-The six fake feeds are named `CueVideo CAM1` â€¦ `CueVideo CAM6`; map them to inputs in `pictures` in the config. `CUEVIDEO_NDI_NEXT` / `CUEVIDEO_NDI_LIVE` still override a tile with one fixed source when needed.
+The six fake feeds are named `CueVideo CAM1` … `CueVideo CAM6`; map them to inputs in `pictures` in the config. `CUEVIDEO_NDI_NEXT` / `CUEVIDEO_NDI_LIVE` still override a tile with one fixed source when needed.
 
 `dotnet run --project windows\src\CueVideo.Spike -- atem 192.168.10.159 8` prints the real handshake, program/preview and link transitions without opening the UI. `dotnet run --project windows\src\CueVideo.Spike -- ndi 4` lists the NDI sources currently on the network.
 
@@ -126,7 +126,7 @@ The six fake feeds are named `CueVideo CAM1` â€¦ `CueVideo CAM6`; map them t
 
 Screens, routes, framing rules and `trackTuning` are typed models even though the Windows UI does not route yet, so a Mac-written setup exposes them to Windows code instead of an opaque blob. The macOS side of that schema is `Sources/CueVideo/Config.swift` (setup, screens, routes, framing, tuning) and `Sources/CueATEM/PTZ.swift` (cameras and shots); the fixtures below pin the Windows copy.
 
-The config contract is pinned by the fixtures in `windows/tests/fixtures/config`: Mac-written documents in `mac-written/` (an empty setup, a full setup and a file full of unknown keys), a hand-written minimal file in `hand-written/`, and a broken file in `invalid/`. `ConfigContractTests` loads each fixture through the store, saves it, and checks a Mac-written document comes back with the same keys and values; a hand-written one keeps what it says, and the broken one is reported and left as written. A renamed field fails the typed assertions. Add a fixture to widen the contract rather than restating the schema in a test.
+The config contract is pinned by the fixtures in `windows/tests/fixtures/config`: Mac-written documents in `mac-written/` (an empty setup, a full setup and a file full of unknown keys), a hand-written minimal file in `hand-written/`, and a broken file in `invalid/`. `ConfigContractTests` loads each fixture through the store, saves it, and checks a Mac-written document comes back with the same keys and values in both directions (nothing dropped or added); a hand-written one keeps what it says, and the broken one is reported and left as written. A renamed field fails the typed assertions. Add a fixture to widen the contract rather than restating the schema in a test.
 
 Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; the app recalls 1-9 with their configured names ("Full Stage", "Sermon"). Each camera's shot row shows its saved shots from `shots`, in file order: a place shot moves the camera to its counts, an exposure shot sets its exposure. A camera with no saved shots falls back to the presets named in `presetNames`, ordered by `presetOrder` and then number.
 

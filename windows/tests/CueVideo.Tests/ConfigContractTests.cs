@@ -7,9 +7,9 @@ namespace CueVideo.Tests;
 /// <summary>
 /// Replays the canonical setup documents in <c>tests/fixtures/config</c> through the store the
 /// app uses. The fixtures are the contract with the macOS app: a Mac-written document must load,
-/// save and come back with the same keys and values, and a hand-written one must keep what it
-/// says. The typed assertions fail when a field is renamed; a replay alone would let the old
-/// key survive as an unknown one.
+/// save and come back with the same keys and values in both directions, and a hand-written one
+/// must keep what it says. The typed assertions fail when a field is renamed; a replay alone
+/// would let the old key survive as an unknown one.
 /// </summary>
 public sealed class ConfigContractTests : IDisposable
 {

@@ -24,5 +24,5 @@ Review-time rules that need judgement. Mechanical rules belong in `windows/check
 - Test behaviour at a public seam; name tests as specifications.
 - A policy table can be one theory. Wiring still needs its own check.
 - A test named for a configuration sets it away from the default, or it proves nothing.
-- A round-trip test saves before it reloads, and compares both directions: dropping a key fails, and so does adding an unexpected one.
+- A round-trip test compares the saved document in both directions — dropping a key fails, and so does adding an unexpected one — and reloads what it saved.
 - Any shortcut, focus or dialog safety change needs either an Avalonia headless test or the manual checklist in `windows/README.md`.
