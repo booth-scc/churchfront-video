@@ -126,6 +126,24 @@ public sealed class NdiHubTests
     }
 
     [Fact]
+    public async Task ASavedSourceFollowsItsComputerToANewName()
+    {
+        var ndi = new FakeNdi("PRODUCTN01SMINI (CueScreens Side Screens)");
+        using var hub = ndi.CreateHub();
+        var frames = new FrameCounter();
+
+        using var subscription = hub.Subscribe(
+            "PRODUCTION-01S-MAC-MINI.LOCAL (CueScreens Side Screens)",
+            frames.OnFrame);
+
+        await TestWait.Until(
+            () => frames.Count > 0,
+            "The saved source never opened the sender under its new computer name.");
+
+        Assert.Equal(["PRODUCTN01SMINI (CueScreens Side Screens)"], ndi.OpenedNames);
+    }
+
+    [Fact]
     public async Task AWaitingFeedReportsTheSourcesItCanSee()
     {
         var ndi = new FakeNdi("STUDIO-PC (Other)");

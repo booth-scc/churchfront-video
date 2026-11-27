@@ -13,7 +13,7 @@ namespace CueVideo.App;
 /// Engineer screens: map NDI feeds to inputs, edit cameras and the switcher address,
 /// and check what the app can actually see on the network.
 /// </summary>
-public sealed class EngineerView : UserControl
+public sealed class EngineerView : UserControl, IDisposable
 {
     private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#F4F5F7"));
     private static readonly IBrush InkDim = new SolidColorBrush(Color.Parse("#9AA0AA"));
@@ -23,7 +23,7 @@ public sealed class EngineerView : UserControl
 
     private readonly Booth _booth;
     private readonly IReadOnlyList<PtzCameraConfig> _builtFromCameras;
-    private readonly NdiFinder? _finder;
+    private readonly INdiFinder? _finder;
     private readonly ObservableCollection<string> _sources = [];
     private readonly List<(string Key, ComboBox Combo)> _feedCombos = [];
     private readonly TextBlock _scanStatus;
@@ -31,7 +31,8 @@ public sealed class EngineerView : UserControl
     private readonly StackPanel _cameraStatus = new() { Spacing = 4 };
     private readonly StackPanel _sourceList = new() { Spacing = 2 };
 
-    public EngineerView(Booth booth)
+    /// <summary>Builds the screens around the NDI clients; tests pass a fake finder here.</summary>
+    public EngineerView(Booth booth, Func<INdiFinder>? finders = null)
     {
         _booth = booth;
         _builtFromCameras = booth.Config.Cameras.ToList();
@@ -39,7 +40,7 @@ public sealed class EngineerView : UserControl
 
         try
         {
-            _finder = NdiFinder.Create(showLocalSources: true);
+            _finder = finders is null ? NdiFinder.Create(showLocalSources: true) : finders();
         }
         catch (Exception)
         {
@@ -329,12 +330,14 @@ public sealed class EngineerView : UserControl
 
         var found = await Task.Run(() => _finder.GetSources(TimeSpan.FromSeconds(2)));
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var onNetwork = new List<string>();
 
         foreach (var source in found)
         {
-            // NDI can advertise the same sender more than once (IPv4 and IPv6).
-            var shortName = ShortName(source.Name).Trim();
-            if (!seen.Add(shortName)) continue;
+            // NDI can advertise the same sender more than once (IPv4 and IPv6), but two
+            // senders on different computers may share a short name; keep the full names.
+            if (!seen.Add(source.Name.Trim())) continue;
+            onNetwork.Add(source.Name);
             _sources.Add(source.Name);
         }
 
@@ -352,18 +355,9 @@ public sealed class EngineerView : UserControl
                 continue;
             }
 
-            var match = _sources.FirstOrDefault(s =>
-                s.Equals(picture, StringComparison.OrdinalIgnoreCase) ||
-                ShortName(s).Equals(picture, StringComparison.OrdinalIgnoreCase) ||
-                ShortName(s).Equals(ShortName(picture), StringComparison.OrdinalIgnoreCase));
-
-            if (match is null)
-            {
-                _sources.Add(picture);
-                match = picture;
-            }
-
-            combo.SelectedItem = match;
+            // The saved picture itself is in the list above; match against the network only,
+            // or its alias would count as a second sender on the same channel.
+            combo.SelectedItem = NdiName.Match(picture, onNetwork);
         }
 
         RefreshSourceList();
@@ -383,13 +377,6 @@ public sealed class EngineerView : UserControl
         {
             _sourceList.Children.Add(new TextBlock { Text = "• " + name, FontSize = 11, Foreground = Ink });
         }
-    }
-
-    private static string ShortName(string name)
-    {
-        var open = name.LastIndexOf('(');
-        var close = name.LastIndexOf(')');
-        return open >= 0 && close > open ? name[(open + 1)..close] : name;
     }
 
     private static TextBlock Heading(string text) => new()

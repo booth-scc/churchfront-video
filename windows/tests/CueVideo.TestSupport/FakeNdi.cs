@@ -12,6 +12,7 @@ public sealed class FakeNdi
 
     private readonly object _gate = new();
     private readonly List<FakeNdiReceiver> _receivers = [];
+    private readonly List<string> _openedNames = [];
 
     public FakeNdi(params string[] sources) =>
         Sources = sources.Select(name => new NdiSourceInfo(name, "")).ToArray();
@@ -34,6 +35,15 @@ public sealed class FakeNdi
         }
     }
 
+    /// <summary>The full advertised name each receiver was opened with, in order.</summary>
+    public IReadOnlyList<string> OpenedNames
+    {
+        get
+        {
+            lock (_gate) return _openedNames.ToArray();
+        }
+    }
+
     public NdiHub CreateHub() => new(CreateFinder, OpenReceiver);
 
     public INdiFinder CreateFinder() => new FakeNdiFinder(() => Sources);
@@ -41,7 +51,12 @@ public sealed class FakeNdi
     public INdiReceiver OpenReceiver(string sourceName)
     {
         var receiver = new FakeNdiReceiver(Frame);
-        lock (_gate) _receivers.Add(receiver);
+        lock (_gate)
+        {
+            _openedNames.Add(sourceName);
+            _receivers.Add(receiver);
+        }
+
         return receiver;
     }
 

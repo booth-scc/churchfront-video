@@ -279,7 +279,10 @@ public sealed class NdiHub : IDisposable
             }
         }
 
-        /// <summary>NDI opens a receiver by the full advertised name, not the short one.</summary>
+        /// <summary>
+        /// The sender to open for this feed's saved name. A renamed computer still resolves by
+        /// its channel, and NDI opens a receiver by the full advertised name, not the short one.
+        /// </summary>
         private NdiSourceInfo? WaitForSource(INdiFinder finder)
         {
             IReadOnlyList<NdiSourceInfo> sources;
@@ -295,12 +298,9 @@ public sealed class NdiHub : IDisposable
                 return null;
             }
 
+            var wanted = NdiName.Match(SourceName, sources.Select(source => source.Name).ToArray());
             var match = sources.FirstOrDefault(source =>
-                    source.Name.Equals(SourceName, StringComparison.OrdinalIgnoreCase))
-                ?? sources.FirstOrDefault(source =>
-                    source.ShortName.Equals(SourceName, StringComparison.OrdinalIgnoreCase))
-                ?? sources.FirstOrDefault(source =>
-                    source.Name.Contains(SourceName, StringComparison.OrdinalIgnoreCase));
+                string.Equals(source.Name, wanted, StringComparison.OrdinalIgnoreCase));
 
             if (match is null)
             {

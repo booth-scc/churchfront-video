@@ -4,7 +4,7 @@ C#/.NET port of the macOS SwiftUI app in `../Sources`, aimed at the booth's Wind
 
 ## Status
 
-Phase 0/1 in progress. ATEM control and NDI send/receive work end to end, VISCA over IP (UDP 52381) is implemented with a fake-camera test suite, and the operator screen mirrors the macOS layout: NEXT and LIVE on top, a centred strip of live source thumbnails, and one bottom bar with the camera chip, exposure, per-camera shots, framing pad, and FADE / CUT / BLACK / LOWER THIRDS. The operator screen renders program, preview, tally, status, the camera on Next and its exposure from one `Booth` snapshot in Core, so the window is only an adapter. NDI views share a feed hub: one receiver per source, opened by the first tile that shows it and closed after a short grace once the last one leaves. The Booth also owns the per-input camera links, so the joystick, exposure, shot rows and presets all drive the camera on Next through the same place. An Engineer view (same window, toggled from the header) maps NDI feeds to inputs, edits cameras and tests VISCA replies. The tracker is still to come.
+Phase 0/1 in progress. ATEM control and NDI send/receive work end to end, VISCA over IP (UDP 52381) is implemented with a fake-camera test suite, and the operator screen mirrors the macOS layout: NEXT and LIVE on top, a centred strip of live source thumbnails, and one bottom bar with the camera chip, exposure, per-camera shots, framing pad, and FADE / CUT / BLACK / LOWER THIRDS. The operator screen renders program, preview, tally, status, the camera on Next and its exposure from one `Booth` snapshot in Core, so the window is only an adapter. NDI views share a feed hub: one receiver per source, opened by the first tile that shows it and closed after a short grace once the last one leaves. A saved feed still resolves when its computer gets a new name, by matching the channel in `COMPUTER (Channel)`. The Booth also owns the per-input camera links, so the joystick, exposure, shot rows and presets all drive the camera on Next through the same place. An Engineer view (same window, toggled from the header) maps NDI feeds to inputs, edits cameras and tests VISCA replies. The tracker is still to come.
 
 ## Engineer view
 
@@ -140,7 +140,7 @@ Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; th
 |---|---|---|
 | `src/CueVideo.Atem` | ATEM UDP 9910 client, state store, dedup | `Sources/CueATEM/ATEM.swift` |
 | `src/CueVideo.Visca` | VISCA-IP 52381, units/calibration (raw TCP is not ported) | `Sources/CueATEM/PTZ.swift` (VISCALink, ViscaUnits) |
-| `src/CueVideo.Ndi` | P/Invoke to the NDI runtime, receive + discovery | `Sources/NDIBridge`, `NDIFeed.swift` |
+| `src/CueVideo.Ndi` | P/Invoke to the NDI runtime, receive + discovery, feed hub and source-name matching | `Sources/NDIBridge`, `NDIFeed.swift` |
 | `src/CueVideo.Vision` | ONNX Runtime DirectML pose/identity | `Tracker.swift`, `Identity.swift` |
 | `src/CueVideo.Core` | Booth (config + switcher state + one render snapshot), config, orchestration, tracking, stage scan | `Config.swift`, `App.swift` (Booth), `StageScan.swift`, `ControlServer.swift` |
 | `src/CueVideo.App` | Avalonia operator UI | `VolunteerView.swift` and friends |
