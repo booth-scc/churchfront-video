@@ -30,6 +30,16 @@ public sealed class NdiNameTests
             NdiName.Match("PRODUCTION-01S-MAC-MINI.LOCAL (CueScreens Side Screens)", OnNetwork));
 
     [Fact]
+    public void ASavedShortNameResolvesToTheAdvertisedFullName() =>
+        Assert.Equal(
+            "SHORESLIVESTREAMPC (CueVideo CAM1)",
+            NdiName.Match("CueVideo CAM1", ["SHORESLIVESTREAMPC (CueVideo CAM1)"]));
+
+    [Fact]
+    public void ABareChannelIsNotGuessedWhenTwoSendersShareIt() =>
+        Assert.Equal("Lobby", NdiName.Match("Lobby", ["A (Lobby)", "B (Lobby)"]));
+
+    [Fact]
     public void TwoSendersWithTheChannelIsNotAGuess() =>
         Assert.Equal(
             "N5-C (Channel-NDI)",

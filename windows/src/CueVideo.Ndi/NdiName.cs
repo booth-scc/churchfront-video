@@ -19,8 +19,9 @@ public static class NdiName
             if (string.Equals(name, wanted, StringComparison.OrdinalIgnoreCase)) return name;
         }
 
-        var channel = Channel(wanted);
-        if (channel is null) return wanted;
+        // A saved name may be the channel alone ("CueVideo CAM1") or the whole
+        // "COMPUTER (Channel)" name; either half identifies the sender.
+        var channel = Channel(wanted) ?? wanted;
 
         string? found = null;
 

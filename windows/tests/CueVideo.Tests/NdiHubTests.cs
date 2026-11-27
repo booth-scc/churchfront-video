@@ -126,6 +126,22 @@ public sealed class NdiHubTests
     }
 
     [Fact]
+    public async Task ASavedShortNameOpensTheFullAdvertisedSender()
+    {
+        var ndi = new FakeNdi("SHORESLIVESTREAMPC (CueVideo CAM1)");
+        using var hub = ndi.CreateHub();
+        var frames = new FrameCounter();
+
+        using var subscription = hub.Subscribe("CueVideo CAM1", frames.OnFrame);
+
+        await TestWait.Until(
+            () => frames.Count > 0,
+            "A saved short name never opened its full advertised sender.");
+
+        Assert.Equal(["SHORESLIVESTREAMPC (CueVideo CAM1)"], ndi.OpenedNames);
+    }
+
+    [Fact]
     public async Task ASavedSourceFollowsItsComputerToANewName()
     {
         var ndi = new FakeNdi("PRODUCTN01SMINI (CueScreens Side Screens)");
