@@ -17,8 +17,14 @@ public sealed record NdiSourceInfo(string Name, string Url)
     }
 }
 
+/// <summary>The senders currently on the network, as one feed's discovery sees them.</summary>
+public interface INdiFinder : IDisposable
+{
+    IReadOnlyList<NdiSourceInfo> GetSources(TimeSpan? wait = null);
+}
+
 /// <summary>Wraps NDIlib_find: the list of senders currently on the network.</summary>
-public sealed class NdiFinder : IDisposable
+public sealed class NdiFinder : INdiFinder
 {
     private readonly object _gate = new();
     private readonly IntPtr _finder;

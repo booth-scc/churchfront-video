@@ -77,7 +77,10 @@ $helpers += Start-Process -FilePath $spike -ArgumentList 'fake-atem','9910' -Pas
 foreach ($port in 52381..52384) {
     $helpers += Start-Process -FilePath $spike -ArgumentList 'fake-visca',$port -PassThru -WindowStyle Hidden
 }
-$helpers += Start-Process -FilePath $spike -ArgumentList 'fake-ndi-multi','6','36000' -PassThru -WindowStyle Hidden
+$ndiLog = Join-Path $demo 'ndi-sender.log'
+$ndiErrors = Join-Path $demo 'ndi-sender.err.log'
+$helpers += Start-Process -FilePath $spike -ArgumentList 'fake-ndi-multi','6','36000' -PassThru -WindowStyle Hidden `
+    -RedirectStandardOutput $ndiLog -RedirectStandardError $ndiErrors
 
 Start-Sleep -Seconds 2
 

@@ -10,30 +10,34 @@ using CueVideo.Ndi;
 namespace CueVideo.App;
 
 /// <summary>
-/// Shows one NDI sender. Frames are copied into a WriteableBitmap on the UI thread;
-/// older frames are dropped rather than queued, so the picture stays live.
+/// Shows one NDI sender from the shared feed hub. Frames are copied into a WriteableBitmap on
+/// the UI thread; older frames are dropped rather than queued, so the picture stays live.
+/// The view retains the feed while it is showing and releases it when it closes.
 /// </summary>
 public sealed class NdiView : Grid, IDisposable
 {
     private readonly Image _image = new() { Stretch = Stretch.Uniform };
     private readonly TextBlock _status;
+    private readonly NdiHub _hub;
     private readonly string _sourceName;
-    private readonly bool _lowestBandwidth;
+    private readonly string _waitingText;
 
     private WriteableBitmap? _bitmap;
-    private Thread? _thread;
-    private volatile bool _running = true;
+    private IDisposable? _subscription;
+    private volatile bool _closed;
     private int _pending;
-    private bool _gotFrame;
 
-    public NdiView(string sourceName, string emptyText, bool lowestBandwidth = true)
+    public NdiView(NdiHub hub, string sourceName, string emptyText)
     {
+        _hub = hub;
         _sourceName = sourceName;
-        _lowestBandwidth = lowestBandwidth;
+        _waitingText = string.IsNullOrWhiteSpace(emptyText)
+            ? $"WAITING FOR NDI\n{sourceName}"
+            : emptyText;
 
         _status = new TextBlock
         {
-            Text = emptyText,
+            Text = _waitingText,
             FontSize = 13,
             LetterSpacing = 2,
             Foreground = new SolidColorBrush(Color.Parse("#3C4150")),
@@ -48,93 +52,53 @@ public sealed class NdiView : Grid, IDisposable
 
     public void Start()
     {
-        _thread = new Thread(Loop) { IsBackground = true, Name = $"ndi:{_sourceName}" };
-        _thread.Start();
+        ObjectDisposedException.ThrowIf(_closed, this);
+        _subscription ??= _hub.Subscribe(_sourceName, OnFrame, OnStatus);
     }
 
-    private void Loop()
+    private void OnFrame(in NdiFrameView frame)
     {
-        NdiFinder finder;
+        if (_closed || Interlocked.CompareExchange(ref _pending, 1, 0) != 0) return;
+
         try
         {
-            finder = NdiFinder.Create(showLocalSources: true);
+            Copy(in frame);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Dispatcher.UIThread.Post(() => _status.Text = $"NDI: {ex.Message}");
-            return;
-        }
-
-        using (finder)
-        {
-            while (_running)
-            {
-                var source = WaitForSource(finder);
-                if (source is null) continue;
-
-                NdiReceiver? receiver = null;
-                try
-                {
-                    receiver = NdiReceiver.Open(source.Name, _lowestBandwidth);
-                }
-                catch (Exception ex)
-                {
-                    Dispatcher.UIThread.Post(() => _status.Text = $"NDI: {ex.Message}");
-                    Thread.Sleep(500);
-                    continue;
-                }
-
-                using (receiver)
-                {
-                    Pump(receiver);
-                }
-            }
+            // Let the next frame try again rather than freezing this tile for good.
+            Interlocked.Exchange(ref _pending, 0);
+            throw;
         }
     }
 
-    /// <summary>NDI opens a receiver by the full advertised name, not the short one.</summary>
-    private NdiSourceInfo? WaitForSource(NdiFinder finder)
+    private void OnStatus(NdiFeedStatus status)
     {
-        var sources = finder.GetSources(TimeSpan.FromSeconds(1));
+        if (_closed) return;
 
-        var match = sources.FirstOrDefault(s =>
-            s.Name.Equals(_sourceName, StringComparison.OrdinalIgnoreCase) ||
-            s.ShortName.Equals(_sourceName, StringComparison.OrdinalIgnoreCase) ||
-            s.Name.Contains(_sourceName, StringComparison.OrdinalIgnoreCase));
-
-        if (match is null)
+        Dispatcher.UIThread.Post(() =>
         {
-            Dispatcher.UIThread.Post(() =>
+            if (_closed) return;
+
+            if (status.Error is { } error)
             {
-                if (!_gotFrame)
-                {
-                    var visible = string.Join(", ", sources.Take(3).Select(s => s.ShortName));
-                    _status.Text = sources.Count == 0
-                        ? $"WAITING FOR NDI\n{_sourceName}"
-                        : $"WAITING FOR NDI\n{_sourceName}\nseen: {visible}";
-                }
-            });
-        }
-
-        return match;
-    }
-
-    private void Pump(NdiReceiver receiver)
-    {
-        var lastFrame = DateTime.UtcNow;
-
-        while (_running && (DateTime.UtcNow - lastFrame).TotalSeconds < 5)
-        {
-            if (Interlocked.CompareExchange(ref _pending, 1, 0) != 0)
+                _status.Text = $"NDI: {error}";
+            }
+            else if (status.Stopped)
             {
-                Thread.Sleep(5);
-                continue;
+                _status.Text = $"PICTURE STOPPED\n{_sourceName}";
+            }
+            else if (status.SeenSources.Count == 0)
+            {
+                _status.Text = _waitingText;
+            }
+            else
+            {
+                _status.Text = $"{_waitingText}\nseen: {string.Join(", ", status.SeenSources.Take(3))}";
             }
 
-            var captured = receiver.TryCapture(200, (in NdiFrameView frame) => Copy(frame));
-            if (captured) lastFrame = DateTime.UtcNow;
-            else Interlocked.Exchange(ref _pending, 0);
-        }
+            _status.IsVisible = true;
+        });
     }
 
     private void Copy(in NdiFrameView frame)
@@ -145,24 +109,39 @@ public sealed class NdiView : Grid, IDisposable
         var rowBytes = width * 4;
 
         var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(rowBytes * height);
-        for (var y = 0; y < height; y++)
-        {
-            frame.Pixels.Slice(y * stride, rowBytes).CopyTo(buffer.AsSpan(y * rowBytes, rowBytes));
-        }
+        var posted = false;
 
-        Dispatcher.UIThread.Post(() =>
+        try
         {
-            try
+            for (var y = 0; y < height; y++)
             {
-                Blit(buffer, width, height);
+                frame.Pixels.Slice(y * stride, rowBytes).CopyTo(buffer.AsSpan(y * rowBytes, rowBytes));
             }
-            finally
+
+            Dispatcher.UIThread.Post(() =>
             {
-                System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
-                _status.IsVisible = false;
-                Interlocked.Exchange(ref _pending, 0);
-            }
-        });
+                try
+                {
+                    if (_closed) return;
+                    Blit(buffer, width, height);
+                }
+                finally
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+                    if (!_closed)
+                    {
+                        _status.IsVisible = false;
+                        Interlocked.Exchange(ref _pending, 0);
+                    }
+                }
+            });
+
+            posted = true;
+        }
+        finally
+        {
+            if (!posted) System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     private void Blit(byte[] buffer, int width, int height)
@@ -182,14 +161,13 @@ public sealed class NdiView : Grid, IDisposable
         {
             Marshal.Copy(buffer, y * rowBytes, locked.Address + y * locked.RowBytes, rowBytes);
         }
-
-        _gotFrame = true;
     }
 
     public void Dispose()
     {
-        _running = false;
-        try { _thread?.Join(500); } catch (Exception) { /* shutting down */ }
+        _closed = true;
+        _subscription?.Dispose();
+        _subscription = null;
         _bitmap?.Dispose();
         _bitmap = null;
     }

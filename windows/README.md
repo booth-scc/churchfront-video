@@ -4,7 +4,7 @@ C#/.NET port of the macOS SwiftUI app in `../Sources`, aimed at the booth's Wind
 
 ## Status
 
-Phase 0/1 in progress. ATEM control and NDI send/receive work end to end, VISCA over IP (UDP 52381) is implemented with a fake-camera test suite, and the operator screen mirrors the macOS layout: NEXT and LIVE on top, a centred strip of live source thumbnails, and one bottom bar with the camera chip, exposure, per-camera shots, framing pad, and FADE / CUT / BLACK / LOWER THIRDS. The operator screen renders program, preview, tally, status, the camera on Next and its exposure from one `Booth` snapshot in Core, so the window is only an adapter. The Booth also owns the per-input camera links, so the joystick, exposure, shot rows and presets all drive the camera on Next through the same place. An Engineer view (same window, toggled from the header) maps NDI feeds to inputs, edits cameras and tests VISCA replies. The tracker is still to come.
+Phase 0/1 in progress. ATEM control and NDI send/receive work end to end, VISCA over IP (UDP 52381) is implemented with a fake-camera test suite, and the operator screen mirrors the macOS layout: NEXT and LIVE on top, a centred strip of live source thumbnails, and one bottom bar with the camera chip, exposure, per-camera shots, framing pad, and FADE / CUT / BLACK / LOWER THIRDS. The operator screen renders program, preview, tally, status, the camera on Next and its exposure from one `Booth` snapshot in Core, so the window is only an adapter. NDI views share a feed hub: one receiver per source, opened by the first tile that shows it and closed after a short grace once the last one leaves. The Booth also owns the per-input camera links, so the joystick, exposure, shot rows and presets all drive the camera on Next through the same place. An Engineer view (same window, toggled from the header) maps NDI feeds to inputs, edits cameras and tests VISCA replies. The tracker is still to come.
 
 ## Engineer view
 
@@ -83,7 +83,7 @@ Requires Inno Setup 6: `winget install JRSoftware.InnoSetup`.
 
 It refuses to start while OBS or Churchfront Video is already running, so a demo cannot stop a service or the installed app. Pass `-Force` to stop the app and continue. Pass `-Build` to run the freshly built Debug app instead of `dist\publish`.
 
-`windows\tools\demo-smoke.ps1` is the non-interactive check for the operator screen: it starts the demo with the Debug build, reads the exposure rows, edits the demo config to check the live reload, invokes zoom, focus, a shot-row preset and auto exposure, holds the joystick, checks the app stayed up with no crash log, then tears the demo down. Run it after changing camera or config wiring:
+`windows\tools\demo-smoke.ps1` is the non-interactive check for the operator screen: it starts the demo with the Debug build, reads the exposure rows, edits the demo config to check the live reload, maps a second tile onto an existing feed and checks the fake NDI sender still reports one receiver for it, moves those tiles away and checks the receiver closes, invokes zoom, focus, a shot-row preset and auto exposure, holds the joystick, checks the app stayed up with no crash log, then tears the demo down. Run it after changing camera or config wiring:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File windows\tools\demo-smoke.ps1
@@ -94,6 +94,8 @@ Nothing the demo needs lives in `%TEMP%`:
 | What | Where |
 |---|---|
 | Demo config | `%APPDATA%\CueVideo\demo\config.json` |
+| NDI sender connections (demo) | `%APPDATA%\CueVideo\demo\ndi-sender.log` |
+| NDI sender errors (demo) | `%APPDATA%\CueVideo\demo\ndi-sender.err.log` |
 | Real config | `%APPDATA%\CueVideo\config.json` |
 | Crash log | `%LOCALAPPDATA%\CueVideo\logs\crash.log` |
 | Published build + installer | `windows\dist` |

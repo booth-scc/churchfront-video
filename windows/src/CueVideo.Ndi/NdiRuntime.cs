@@ -125,6 +125,9 @@ public static class NdiRuntime
     internal delegate void SendVideoV2Fn(IntPtr sender, ref VideoFrameV2 video);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate int SendGetNoConnectionsFn(IntPtr sender, uint timeoutMs);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void SendDestroyFn(IntPtr sender);
 }
 

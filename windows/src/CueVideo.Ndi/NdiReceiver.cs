@@ -26,8 +26,14 @@ public readonly ref struct NdiFrameView
 
 public delegate void NdiFrameHandler(in NdiFrameView frame);
 
+/// <summary>One open receiver, so a feed can be fed by a test double.</summary>
+public interface INdiReceiver : IDisposable
+{
+    bool TryCapture(int timeoutMs, NdiFrameHandler handler);
+}
+
 /// <summary>Wraps NDIlib_recv for one sender.</summary>
-public sealed class NdiReceiver : IDisposable
+public sealed class NdiReceiver : INdiReceiver
 {
     private const int FrameTypeVideo = 1;
     private const int FrameTypeError = 4;
@@ -38,16 +44,13 @@ public sealed class NdiReceiver : IDisposable
     private readonly NdiRuntime.RecvDestroyFn _destroy;
     private bool _disposed;
 
-    private NdiReceiver(IntPtr receiver, string sourceName)
+    private NdiReceiver(IntPtr receiver)
     {
         _receiver = receiver;
-        SourceName = sourceName;
         _capture = NdiRuntime.Get<NdiRuntime.RecvCaptureV2Fn>("NDIlib_recv_capture_v2");
         _freeVideo = NdiRuntime.Get<NdiRuntime.RecvFreeVideoV2Fn>("NDIlib_recv_free_video_v2");
         _destroy = NdiRuntime.Get<NdiRuntime.RecvDestroyFn>("NDIlib_recv_destroy");
     }
-
-    public string SourceName { get; }
 
     /// <summary>
     /// Opens a receiver. <paramref name="lowestBandwidth"/> asks the sender for its
@@ -75,7 +78,7 @@ public sealed class NdiReceiver : IDisposable
             var receiver = NdiRuntime.Get<NdiRuntime.RecvCreateV3Fn>("NDIlib_recv_create_v3")(ref create);
             if (receiver == IntPtr.Zero) throw new NdiUnavailableException($"Could not open receiver for '{sourceName}'.");
 
-            return new NdiReceiver(receiver, sourceName);
+            return new NdiReceiver(receiver);
         }
         finally
         {
@@ -143,6 +146,7 @@ public sealed class NdiSender : IDisposable
 {
     private readonly IntPtr _sender;
     private readonly NdiRuntime.SendVideoV2Fn _send;
+    private readonly NdiRuntime.SendGetNoConnectionsFn _connections;
     private readonly NdiRuntime.SendDestroyFn _destroy;
     private bool _disposed;
 
@@ -150,6 +154,7 @@ public sealed class NdiSender : IDisposable
     {
         _sender = sender;
         _send = NdiRuntime.Get<NdiRuntime.SendVideoV2Fn>("NDIlib_send_send_video_v2");
+        _connections = NdiRuntime.Get<NdiRuntime.SendGetNoConnectionsFn>("NDIlib_send_get_no_connections");
         _destroy = NdiRuntime.Get<NdiRuntime.SendDestroyFn>("NDIlib_send_destroy");
     }
 
@@ -203,6 +208,13 @@ public sealed class NdiSender : IDisposable
 
     private static int MakeFourCc(char a, char b, char c, char d) =>
         a | (b << 8) | (c << 16) | (d << 24);
+
+    /// <summary>
+    /// How many connections this sender has now. Waits up to <paramref name="timeoutMs"/> for
+    /// that number to change. NDI can count more than one connection per receiver, so compare
+    /// this between senders rather than treating it as a receiver count.
+    /// </summary>
+    public int ConnectionCount(int timeoutMs = 0) => _connections(_sender, (uint)Math.Max(0, timeoutMs));
 
     public void Dispose()
     {

@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CueVideo.Atem\CueVideo.Atem.csproj" />
+    <ProjectReference Include="..\..\src\CueVideo.Ndi\CueVideo.Ndi.csproj" />
   </ItemGroup>
 
 </Project>

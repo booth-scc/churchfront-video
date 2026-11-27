@@ -66,6 +66,29 @@ try {
                 [System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id)))
     }
 
+    function Get-SharedLines([string]$path) {
+        $stream = [System.IO.File]::Open(
+            $path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        try {
+            $reader = New-Object System.IO.StreamReader($stream)
+            try { return $reader.ReadToEnd() -split "`r?`n" } finally { $reader.Dispose() }
+        } finally {
+            $stream.Dispose()
+        }
+    }
+
+    function Get-Connections([string]$path) {
+        $counts = @{}
+        if (Test-Path $path) {
+            foreach ($line in (Get-SharedLines $path)) {
+                if ($line -match '^connections CueVideo (CAM\d+): (\d+)$') {
+                    $counts[$Matches[1]] = [int]$Matches[2]
+                }
+            }
+        }
+        return $counts
+    }
+
     function Invoke-Control([string]$id) {
         $element = Find-Control $id
         if (-not $element) { throw "Control '$id' not found." }
@@ -104,6 +127,67 @@ try {
     }
     if (-not $edited) { throw 'A hand edit to config.json did not reach the screen.' }
     Pass 'config reload'
+
+    # Map input 6 onto the picture input 1 already shows. The fake NDI sender reports how
+    # many receivers connect to each source, so this shows one receiver serving both tiles.
+    # NDI counts one receiver as two connections on the send side, so compare sources rather
+    # than expecting an absolute number.
+    $currentConfig = [System.IO.File]::ReadAllText($configPath)
+    $withDuplicate = $currentConfig.Replace('"6": "CueVideo CAM6"', '"6": "CueVideo CAM1"')
+    if ($withDuplicate -eq $currentConfig) {
+        throw 'The demo config has no CAM6 picture to duplicate.'
+    }
+
+    [System.IO.File]::WriteAllText($configPath, $withDuplicate, [System.Text.UTF8Encoding]::new($false))
+    Start-Sleep -Milliseconds 1500
+
+    $senderLog = Join-Path $env:APPDATA 'CueVideo\demo\ndi-sender.log'
+    $connections = @{}
+    $shared = $false
+    $deadline = (Get-Date).AddSeconds(8)
+    do {
+        Start-Sleep -Milliseconds 300
+        $connections = Get-Connections $senderLog
+
+        # Every source is shown through one receiver, so their connection counts match even
+        # though CAM1 also has the second tile. A per-tile receiver would raise CAM1's count.
+        # CAM6 dropping to zero proves the duplicate edit reached the running app.
+        $shared = $connections['CAM1'] -and
+            $connections['CAM1'] -eq $connections['CAM2'] -and
+            $connections['CAM1'] -eq $connections['CAM3'] -and
+            $connections['CAM6'] -eq 0
+    } while (-not $shared -and (Get-Date) -lt $deadline)
+
+    if (-not $shared) {
+        throw ("Two tiles on one source did not share one receiver " +
+            "(CAM1=$($connections['CAM1']) CAM2=$($connections['CAM2']) " +
+            "CAM3=$($connections['CAM3']) CAM6=$($connections['CAM6'])).")
+    }
+    Pass ("one receiver for CAM1 on two tiles " +
+        "(CAM1-3 connections: $($connections['CAM1']),$($connections['CAM2']),$($connections['CAM3']))")
+
+    # Move both CAM1 tiles away from CAM1. Its last view is gone, so the receiver must close.
+    $withoutCam1 = $withDuplicate.Replace('"1": "CueVideo CAM1"', '"1": "CueVideo CAM4"').
+        Replace('"6": "CueVideo CAM1"', '"6": "CueVideo CAM4"')
+    if ($withoutCam1 -eq $withDuplicate) {
+        throw 'The demo config did not have CAM1 on both inputs.'
+    }
+
+    [System.IO.File]::WriteAllText($configPath, $withoutCam1, [System.Text.UTF8Encoding]::new($false))
+
+    $connections = @{}
+    $released = $false
+    $deadline = (Get-Date).AddSeconds(8)
+    do {
+        Start-Sleep -Milliseconds 300
+        $connections = Get-Connections $senderLog
+        $released = $connections['CAM1'] -eq 0
+    } while (-not $released -and (Get-Date) -lt $deadline)
+
+    if (-not $released) {
+        throw "CAM1 kept a receiver after its tiles left (connections: $($connections['CAM1']))."
+    }
+    Pass 'released the unused feed'
 
     Invoke-Control 'ZoomInButton'; Pass 'zoom in'
     Invoke-Control 'FocusButton'; Pass 'focus'

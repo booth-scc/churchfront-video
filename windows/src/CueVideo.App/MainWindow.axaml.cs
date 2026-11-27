@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     private readonly List<NdiView> _thumbs = [];
 
     private Booth _booth = null!;
+    private NdiHub _hub = null!;
     private EngineerView? _engineerView;
     private NdiView? _liveView;
     private NdiView? _nextView;
@@ -62,6 +63,13 @@ public partial class MainWindow : Window
             value.Rendered += state => Dispatcher.UIThread.Post(() => ShowBooth(state));
             value.ConfigChanged += RebuildFromConfig;
         }
+    }
+
+    /// <summary>The shared NDI feeds, set by the composition root before the window opens.</summary>
+    public required NdiHub NdiHub
+    {
+        get => _hub;
+        init => _hub = value;
     }
 
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
@@ -132,8 +140,10 @@ public partial class MainWindow : Window
         _engineerView?.Dispose();
         _engineerView = null;
 
-        // The Booth owns the camera links and closes them with itself.
+        // The Booth owns the camera links and closes them with itself; the hub closes any
+        // feed a view did not.
         _booth.Dispose();
+        _hub.Dispose();
     }
 
     // ---- Switcher ----
@@ -154,7 +164,7 @@ public partial class MainWindow : Window
             var ndi = _booth.PictureFor(source.Input) ?? source.Ndi;
             if (!string.IsNullOrWhiteSpace(ndi))
             {
-                var thumb = new NdiView(ndi, "", lowestBandwidth: true);
+                var thumb = new NdiView(_hub, ndi, "");
                 _thumbs.Add(thumb);
                 host.Child = thumb;
             }
@@ -430,7 +440,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        _liveView = new NdiView(source, $"WAITING FOR LIVE NDI\n{source}");
+        _liveView = new NdiView(_hub, source, $"WAITING FOR LIVE NDI\n{source}");
         ProgramHost.Child = _liveView;
         _liveView.Start();
     }
@@ -456,7 +466,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        _nextView = new NdiView(source, $"WAITING FOR NEXT NDI\n{source}");
+        _nextView = new NdiView(_hub, source, $"WAITING FOR NEXT NDI\n{source}");
         NextHost.Child = _nextView;
         _nextView.Start();
     }

@@ -93,7 +93,7 @@ internal static class NdiTestPattern
 
         for (var index = 0; index < count; index++)
         {
-            var name = $"CueVideo CAM{index + 1}";
+            var name = SourceName(index);
             senders.Add(NdiSender.Create(name));
             bases[index] = new byte[stride * height];
             frames[index] = new byte[stride * height];
@@ -105,6 +105,7 @@ internal static class NdiTestPattern
 
         var until = DateTime.UtcNow.AddSeconds(seconds);
         var started = DateTime.UtcNow;
+        var lastConnections = Enumerable.Repeat(-1, count).ToArray();
 
         while (DateTime.UtcNow < until)
         {
@@ -134,12 +135,29 @@ internal static class NdiTestPattern
                 senders[index].Send(frame, width, height, stride, 20, 1);
             }
 
+            // Report receiver connections when they change, so a demo can show one receiver
+            // serving several tiles.
+            var reported = false;
+            for (var index = 0; index < count; index++)
+            {
+                var connections = senders[index].ConnectionCount();
+                if (connections == lastConnections[index]) continue;
+
+                lastConnections[index] = connections;
+                Console.WriteLine($"connections {SourceName(index)}: {connections}");
+                reported = true;
+            }
+
+            if (reported) Console.Out.Flush();
+
             Thread.Sleep(50);
         }
 
         foreach (var sender in senders) sender.Dispose();
         return 0;
     }
+
+    private static string SourceName(int index) => $"CueVideo CAM{index + 1}";
 
     private static void FillBase(byte[] buffer, int width, int height, double hue)
     {
