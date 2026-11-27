@@ -50,6 +50,14 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
 
 File issues only into the user's own repo. Never file into `mattpocock/skills` (the repo these skills come from) unless the user owns it. In a fork, `gh` can default to the upstream parent, so before the first `gh issue create` of a session, check the target with `gh repo view --json nameWithOwner` and confirm it with the user if it is not their repo.
 
+## Ticket size
+
+A ticket should produce one review-sized diff. Split when it needs a new production
+diagnostic or a new demo observable: the behavior, the view wiring, and the demo
+observation are separate slices. When an acceptance criterion says "observed in a demo",
+name the observable and the script that reads it (for Windows, `windows/tools/demo-smoke.ps1`
+and the demo log under `%APPDATA%\CueVideo\demo`).
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_

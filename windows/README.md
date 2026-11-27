@@ -120,6 +120,8 @@ This is a demo run, so Engineer edits stay on screen but are not saved.
 
 The six fake feeds are named `CueVideo CAM1` … `CueVideo CAM6`; map them to inputs in `pictures` in the config. `CUEVIDEO_NDI_NEXT` / `CUEVIDEO_NDI_LIVE` still override a tile with one fixed source when needed.
 
+The fake NDI senders log receiver connections to `%APPDATA%\CueVideo\demo\ndi-sender.log`. NDI counts one receiver as two connections and only reports them once frames flow, so compare sources rather than expecting an absolute count. The log stays open while the demo runs; read it with `FileShare.ReadWrite`.
+
 `dotnet run --project windows\src\CueVideo.Spike -- atem 192.168.10.159 8` prints the real handshake, program/preview and link transitions without opening the UI. `dotnet run --project windows\src\CueVideo.Spike -- ndi 4` lists the NDI sources currently on the network.
 
 ## Configuration
@@ -145,7 +147,7 @@ Camera preset slots start at `firstPreset` (20) so the Stream Deck keeps 1-9; th
 | `src/CueVideo.Spike` | Phase 0 doctor and gate harness | `Tools/fake_atem.py` + `SelfTest.swift` |
 | `tests/CueVideo.Tests` | Unit tests, including the config contract replay | `Tests/` |
 | `tests/CueVideo.App.Tests` | Headless Avalonia window tests (config reload rebuilds tiles and status) | manual demo checklist |
-| `tests/CueVideo.TestSupport` | Shared test doubles, such as the fake switcher | |
+| `tests/CueVideo.TestSupport` | Shared test doubles (`FakeNdi`, `RecordingSwitcher`) and `TestWait` | |
 
 ## Deliberate divergences from the macOS app
 
