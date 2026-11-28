@@ -1,6 +1,6 @@
 # Churchfront Video - Windows port plan
 
-Status: in progress. Phase 0/1 implemented; see `windows/README.md`. Upstream: `techwiz18/churchfront-video` (Apache-2.0, SwiftUI, macOS 14+).
+Status: v1 operator surface built; the gate session and v1.1 tracking are outstanding. See `windows/README.md` and 1.1 for the release cut. Upstream: `techwiz18/churchfront-video` (Apache-2.0, SwiftUI, macOS 14+).
 Target: the Windows 11 live-stream PC in the booth. The church maintains its own fork.
 
 ---
@@ -10,6 +10,25 @@ Target: the Windows 11 live-stream PC in the booth. The church maintains its own
 **Goal.** Give the booth operator the same surface the Mac app gives, on Windows: ATEM state (Next/Live, cut, fade, black, keys), camera control bound to the Next source (joystick, zoom, focus, exposure, shots, presets), AI auto-tracking, stage scan, and live pictures - alongside Companion/Stream Deck and OBS, without disturbing either.
 
 **Non-goals for v1** (left to Companion on purpose): aux routing screens, route buttons, macros, Full Switcher page, DSK routing. No Canon support, no Keychain, no Bonjour. No DeckLink access. No changes to OBS scenes, filters, stream or recording.
+
+### 1.1 Release cut (2026-11-27)
+
+**v1 is the operator surface, not the tracker.** It ships when A1, A2, A3, A4, A7 and A8 pass and the operator surface survives one full service. A5, A9 and A10 move with tracking to v1.1; A6 moves with stage scan.
+
+**Gate session first.** Run it in one weekday-evening maintenance window, never Sunday morning, with a second person watching the cameras. Cameras powered; OBS recording rather than streaming. Keep the evidence:
+
+- a `visca` probe in `CueVideo.Spike` (new) for each camera: position, zoom and focus inquiry replies saved as a transcript;
+- two minutes of each camera's NDI|HX feed recorded by OBS, as the offline tracker input;
+- `CueVideo.Spike -- atem 192.168.10.159 600`, cutting from Companion during the log, to settle G2;
+- OBS program NDI output on for the session, then back off unless the team agrees otherwise.
+
+**Pre-committed fallbacks.** If G3 fails, spend one day on a BirdDog REST 2.0 readback probe; only if REST reports no position, do the image-space closed loop (2-3 days). If G1 fails, stop v1.1 and evaluate encoders: no per-camera picture means no tracker input.
+
+**v1.1 tracking.** Follow the person nearest the centre of the camera on Next shot, with click-to-follow, dead zone, lead room, shot sizing (shoulders up, waist up, full length) and eased starts. Hold A5 and A10. Identity re-ID and speed learning wait for v1.2. Calibration (counts per degree, zoom-to-FOV, mount height and offset) is done by the same two people in the same window, with the values entered in Engineer.
+
+**Override.** When readback shows the operator has taken over (a preset recall or a manual move), tracking pauses and the status strip says so; it resumes 10 seconds after the last manual input if the subject is still visible. If G3 fails there is no divergence signal, so an explicit Track on/off replaces auto-resume.
+
+**Stage scan.** Deferred past v1.1, not dropped: revisit only if tracking needs it or calibration proves painful.
 
 ---
 
@@ -154,11 +173,13 @@ Avalonia Operator tab, designed at 1920x1080, DPI-aware, usable at 1280x720:
 - Settings: IPs, NDI name prefixes, preset base, OBS source, model device, calibration values.
 - Keyboard and mouse only, no touch assumptions.
 
-## 9. Phase 3 - tracking and booth tuning (~2 weeks)
+## 9. Phase 3 - tracking and booth tuning (v1.1, ~2 weeks)
+
+See 1.1 for the v1.1 tracking contract, the gate session and the pre-committed fallbacks.
 
 1. Calibrate each X4 Ultra: counts-per-degree, zoom-to-FOV curve, lens FOV, mount height and offset.
 2. Tune shot sizing per camera and seating area; tune dead zone and lead room against real walk paths.
-3. Stage scan: grid sweep, subject detection, map build, per-camera coverage; target under 3 minutes for three cameras.
+3. Stage scan (deferred past v1.1): grid sweep, subject detection, map build, per-camera coverage; target under 3 minutes for three cameras.
 4. Validate identity matching across a full service (people leaving and returning, similar clothing).
 5. Override behaviour with Stream Deck preset recalls and manual joystick moves: the app must not fight the operator.
 6. Two full-service soak tests with OBS streaming, watching OBS dropped frames and CPU/GPU headroom.
@@ -187,6 +208,8 @@ Avalonia Operator tab, designed at 1920x1080, DPI-aware, usable at 1280x720:
 | A9 | Two-hour soak during a live stream | OBS zero dropped frames, app CPU under 15 percent, GPU under 40 percent |
 | A10 | Stream Deck preset recall while tracking | Tracking pauses, no fight, resumes per policy |
 
+Release cut: **v1** is A1, A2, A3, A4, A7 and A8 plus one full service on the operator surface. **v1.1** is A5, A9 and A10. **A6** ships only if stage scan does.
+
 ---
 
 ## 12. Ownership boundaries (from day one)
@@ -213,17 +236,17 @@ Avalonia Operator tab, designed at 1920x1080, DPI-aware, usable at 1280x720:
 ## 14. Open items for the booth
 
 1. Power the cameras: confirm NDI|HX status, preset counts, firmware. IP mapping is already known.
-2. Run gate 3 (VISCA inquiries), the decisive technical question.
+2. Run the gate session (see 1.1): it settles G1-G4 and records the tracker input.
 3. ATEM firmware version and DSK count.
 4. Confirm volunteers are happy for the app to own joystick/zoom while the Stream Deck keeps presets 1-9.
 5. Resolve the Cam-2S preset mismatch (control page recalls 1/2 for Full Stage and Crowd Wide, setup page saves 8/9).
 5. Confirm the team accepts DistroAV program NDI output being enabled permanently.
-6. Agree a maintenance window for Phase 0 and 3 testing (not Sunday morning).
+6. Set the date for the gate session: a weekday evening with a second person, not Sunday morning.
 
 ## 15. Effort
 
 Phase 0 about 2 days, Phase 1 about 1.5 weeks, Phase 2 about 1.5 weeks, Phase 3 about 2 weeks, Phase 4 about 3 days.
-v1 total **2.5-3.5 weeks focused**, plus 2-3 days if gate 3 fails and tracking must go image-space.
+v1 (Phases 0-2 and packaging) is about 2.5-3 weeks focused; v1.1 adds about 2 weeks, plus 2-3 days if the image-space fallback is needed.
 
 ## 16. Immediate next steps (need a build agent, not plan mode)
 
@@ -254,6 +277,6 @@ All four steps above are complete except the fork remote.
 
 Gates G1 and G4 are verified at the transport level with a local test pattern; the camera NDI|HX stream and OBS `OBS PGM` still need a real check on the devices. Gate G2 is verified against the fake switcher only, because the ATEM was powered down; `CueVideo.Spike -- atem 192.168.10.159 10` settles it when the console is on.
 
-Gate 3 is now a configuration check rather than a spike: the client and its fake-camera tests pass, so the booth session only needs `ndi`/`visca` confirmation against the real X4 Ultras.
+Gate 3 stays decisive: the client and its fake-camera tests pass, but the real X4 Ultras still have to answer inquiries. The gate session records the replies (see 1.1).
 
-Next implementation work: tracker and stage scan in `CueVideo.Vision` (DirectML pose, tracker maths port), camera tiles bound to config, then packaging.
+Next implementation work: add the `visca` probe to `CueVideo.Spike`, run the gate session, then build v1.1 tracking in `CueVideo.Vision`. Stage scan waits for v1.1 data.
